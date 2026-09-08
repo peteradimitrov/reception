@@ -3,8 +3,8 @@
 
   // SETTINGS
   const IMAGE_URL = "https://cdn.prod.website-files.com/6292053974c40677f3ec8971/6a9fc2e1ed75bab1ee180a43_Genius%20(1).webp";
-  const SPEED = 0.9;
-  const INTENSITY = 0.5;
+  const SPEED = 1.5;
+  const INTENSITY = 1;
 
   function start() {
     document.querySelectorAll(".genius-ambient-popup").forEach(popup => {
