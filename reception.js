@@ -7,7 +7,7 @@
 
     pickup: {
       soundFade: .8,
-      popupFade: .6,
+      popupFade: 1.2,
       trailFade: .35
     },
 
