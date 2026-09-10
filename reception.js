@@ -1167,7 +1167,6 @@ function createSteps(popup) {
       if (records[1]) {
         timeline.to({}, { duration: options.gap });
         enter(records[1]);
-        timeline.call(() => records[1].split?.revert());
         if (form) {
           timeline.to(form, {
             autoAlpha: 1,
