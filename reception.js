@@ -29,7 +29,7 @@
     },
 
     steps: {
-      delay: 0.15,
+      delay: 0.5,
       enter: 0.5,
       exit: 0.3,
       stagger: 0.015,
