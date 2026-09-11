@@ -43,6 +43,7 @@
 
     wave: {
       fadeIn: 0.4,
+      barStagger: 0.045,
       delay: 0.15,
       duration: 2,
       height: 56,
@@ -144,7 +145,7 @@
       : fallback;
   }
 
-  // Phone clearance and proximity geometry.
+  // Phone clearance geometry.
 
   function createPhoneZone(options) {
     const button = select(".phone-btn");
@@ -2287,7 +2288,7 @@
     function finishStep(record) {
       hide(record.step);
 
-      // Revert only after the step is hidden to avoid kerning jumps.
+      // Revert only after hiding to avoid visible kerning changes.
       record.splits.forEach(split => split.revert());
       records.delete(record.step);
     }
@@ -2296,7 +2297,7 @@
       const step = items[2];
       const svg = step.querySelector("svg");
 
-      // The SVG rectangles are not necessarily in visual DOM order.
+      // Sort by horizontal position, not SVG source order.
       const bars = Array.from(
         svg?.querySelectorAll("rect") || []
       ).sort(
@@ -2317,7 +2318,7 @@
 
       const maximum = Math.max(wave.height, ...heights);
 
-      // Reserve enough vertical space for the expanded bars.
+      // Give the growing bars enough vertical space.
       if (svg && bars.length) {
         const box = svg.viewBox.baseVal;
 
@@ -2344,14 +2345,25 @@
         svg.setAttribute("focusable", "false");
       }
 
-      timeline.call(() => show(step, 0));
+      // Every bar begins invisible.
+      gsap.set(bars, { opacity: 0 });
 
-      timeline.to(step, {
-        autoAlpha: 1,
-        duration: reduced ? 0.2 : wave.fadeIn,
-        ease: "power2.out"
-      });
+      timeline.call(() => show(step));
 
+      // Fade in from left to right.
+      if (bars.length) {
+        timeline.to(bars, {
+          opacity: 1,
+          duration: reduced ? 0.2 : wave.fadeIn,
+          stagger: {
+            each: reduced ? 0 : wave.barStagger,
+            from: "start"
+          },
+          ease: "power2.out"
+        });
+      }
+
+      // The wave starts after the final bar finishes fading in.
       timeline.to({}, {
         duration: wave.delay
       });
@@ -2372,7 +2384,6 @@
             ? i / (bars.length - 1)
             : 0.5;
 
-          // A soft wave that weakens as it travels right.
           const strength =
             Math.pow(Math.sin(Math.PI * progress), 0.6) *
             (1 - progress * 0.55);
@@ -2409,12 +2420,20 @@
         duration: wave.hold
       });
 
-      timeline.to(step, {
-        autoAlpha: 0,
-        duration: reduced ? 0.2 : wave.fadeOut,
-        ease: "power2.inOut"
-      });
+      // Fade out from left to right after the wave finishes.
+      if (bars.length) {
+        timeline.to(bars, {
+          opacity: 0,
+          duration: reduced ? 0.2 : wave.fadeOut,
+          stagger: {
+            each: reduced ? 0 : wave.barStagger,
+            from: "start"
+          },
+          ease: "power2.inOut"
+        });
+      }
 
+      // Hide the step only after the last bar disappears.
       timeline.call(() => hide(step));
     }
 
@@ -2431,7 +2450,7 @@
       observer.disconnect();
       form.removeEventListener("submit", onSubmit, true);
 
-      // Keep Webflow's form in layout during its exit animation.
+      // Preserve the form layout during its exit animation.
       formWrap.classList.add("is-success-exiting");
 
       if (items[1].contains(document.activeElement)) {
@@ -2449,10 +2468,10 @@
       const second = records.get(items[1]);
       const timeline = gsap.timeline();
 
-      // Title exits first, left to right.
+      // Second-step title exits first.
       exitText(timeline, second);
 
-      // Then the form fades.
+      // Then fade the form.
       timeline.to(formTarget, {
         autoAlpha: 0,
         duration: reduced ? 0.2 : options.formFade,
@@ -2468,14 +2487,14 @@
         duration: options.gap
       });
 
-      // Third step: one SVG wave.
+      // Third step.
       addWave(timeline);
 
       timeline.to({}, {
         duration: wave.finalDelay
       });
 
-      // Fourth step: final text remains visible.
+      // Fourth step remains visible.
       enter(timeline, prepare(items[3]));
 
       timeline.call(() => {
@@ -2487,7 +2506,7 @@
     function onSubmit() {
       submitted = true;
 
-      // Webflow still handles validation and the actual request.
+      // Webflow retains control of validation and submission.
       queueMicrotask(checkSuccess);
     }
 
@@ -2502,8 +2521,8 @@
       formWrap.classList.add("reception-sequence-form");
 
       /*
-       * Keep the success element so Webflow can update it.
-       * Hide it visually, while observing its display state.
+       * Hide the default success message visually.
+       * Its display state still signals Webflow submission success.
        */
       const style = document.createElement("style");
 
