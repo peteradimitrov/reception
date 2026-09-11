@@ -16,7 +16,7 @@
     },
 
     ambient: {
-      delay: 0.25,
+      delay: 0.15,
       videoFade: 1,
       volumeFade: 2,
       volume: 0.35,
