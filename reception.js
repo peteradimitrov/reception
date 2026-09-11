@@ -250,17 +250,20 @@
     };
   }
 
-  // Audio.
+  // Audio: notification stage and ambient stage.
 
   function createSoundManager(options) {
     let context = null;
     let enabled = false;
     let typingRequested = false;
+
     let backgroundOutput = null;
     let masterOutput = null;
-    let finished = false;
-    let ambientAllowed = false;
     let backgroundLevel = 1;
+
+    let finished = false;
+    let ambientSettings = null;
+    let oldAudioTimer = null;
     let attemptId = 0;
 
     const pingSources = new Set();
@@ -348,7 +351,11 @@
       const source = context.createBufferSource();
 
       source.buffer = asset.buffer;
-      source.loop = true;
+
+      source.loop = asset === assets.ambient
+        ? ambientSettings.loop
+        : true;
+
       source.connect(asset.output);
 
       const now = context.currentTime;
@@ -359,6 +366,7 @@
 
       if (fade > 0) {
         asset.output.gain.setValueAtTime(0, now);
+
         asset.output.gain.linearRampToValueAtTime(
           volume,
           now + fade
@@ -383,6 +391,18 @@
     function startRequestedLoops() {
       if (!enabled || context?.state !== "running") return;
 
+      // Once picked up, only ambient audio can restart.
+      if (finished) {
+        if (ambientSettings) {
+          startLoop(
+            assets.ambient,
+            ambientSettings.volumeFade
+          );
+        }
+
+        return;
+      }
+
       startLoop(assets.street, options.streetFadeDuration);
 
       if (typingRequested) {
@@ -394,6 +414,7 @@
       const asset = assets.ring;
 
       if (
+        finished ||
         !enabled ||
         !asset.buffer ||
         asset.source ||
@@ -427,6 +448,7 @@
 
     function ping() {
       if (
+        finished ||
         !enabled ||
         !assets.ping.buffer ||
         context?.state !== "running" ||
@@ -437,6 +459,7 @@
 
       source.buffer = assets.ping.buffer;
       source.connect(assets.ping.output);
+
       pingSources.add(source);
 
       source.onended = () => {
@@ -448,6 +471,8 @@
     }
 
     function play(item, skipAppearancePing = false) {
+      if (finished) return;
+
       if (item.classList.contains("chat")) {
         typingRequested = true;
         startRequestedLoops();
@@ -497,7 +522,9 @@
 
       context = new AudioContextClass();
 
+      // This output controls only the pre-pickup sounds.
       masterOutput = context.createGain();
+      masterOutput.gain.value = finished ? 0 : 1;
       masterOutput.connect(context.destination);
 
       backgroundOutput = context.createGain();
@@ -530,8 +557,6 @@
     }
 
     function enable() {
-      if (finished) return Promise.resolve(false);
-
       const currentAttempt = ++attemptId;
 
       try {
@@ -560,7 +585,9 @@
 
             enabled = success;
 
-            if (enabled) startRequestedLoops();
+            if (enabled) {
+              startRequestedLoops();
+            }
 
             resolve(success);
           }
@@ -585,9 +612,28 @@
       }
     }
 
-    function disable() {
-      attemptId++;
-      enabled = false;
+    function stopAsset(asset) {
+      if (asset.source) {
+        const source = asset.source;
+        asset.source = null;
+        source.stop();
+      }
+
+      if (context && asset.output) {
+        asset.output.gain.cancelScheduledValues(
+          context.currentTime
+        );
+
+        asset.output.gain.setValueAtTime(
+          0,
+          context.currentTime
+        );
+      }
+    }
+
+    function stopOldAudio() {
+      clearTimeout(oldAudioTimer);
+      oldAudioTimer = null;
 
       for (const source of pingSources) {
         source.stop();
@@ -595,46 +641,28 @@
 
       pingSources.clear();
 
-      for (const asset of [
+      [
         assets.typing,
         assets.street,
         assets.ring
-      ]) {
-        if (asset.source) {
-          const source = asset.source;
-          asset.source = null;
-          source.stop();
-        }
+      ].forEach(stopAsset);
+    }
 
-        if (context && asset.output) {
-          asset.output.gain.cancelScheduledValues(
-            context.currentTime
-          );
+    function disable() {
+      attemptId++;
+      enabled = false;
 
-          asset.output.gain.setValueAtTime(
-            0,
-            context.currentTime
-          );
-        }
-      }
+      stopOldAudio();
+      stopAsset(assets.ambient);
     }
 
     function fadeOutAll(duration) {
       if (finished) return;
 
-      ambientAllowed = enabled;
+      // Preserve the visitor's enabled/muted preference.
       finished = true;
-      enabled = false;
-      attemptId++;
 
-      if (
-        !context ||
-        context.state !== "running" ||
-        duration <= 0
-      ) {
-        disable();
-        return;
-      }
+      if (!context) return;
 
       const now = context.currentTime;
 
@@ -645,60 +673,38 @@
         now
       );
 
+      if (
+        context.state !== "running" ||
+        duration <= 0
+      ) {
+        masterOutput.gain.setValueAtTime(0, now);
+        stopOldAudio();
+        return;
+      }
+
       masterOutput.gain.linearRampToValueAtTime(
         0,
         now + duration
       );
 
-      window.setTimeout(disable, duration * 1000 + 50);
+      // Only clean up the old sounds, not ambient audio.
+      oldAudioTimer = window.setTimeout(
+        stopOldAudio,
+        duration * 1000 + 50
+      );
     }
 
     function startAmbient(settings) {
-      if (!ambientAllowed || !context) return;
+      // Remember the request even if the visitor is muted.
+      ambientSettings = settings;
+      assets.ambient.volume = settings.volume;
 
-      const asset = assets.ambient;
+      if (!finished || !enabled || !context) return;
 
-      function play() {
-        if (
-          !ambientAllowed ||
-          !asset.buffer ||
-          asset.source ||
-          context.state !== "running"
-        ) return;
-
-        const source = context.createBufferSource();
-
-        source.buffer = asset.buffer;
-        source.loop = settings.loop;
-        source.connect(asset.output);
-
-        const now = context.currentTime;
-
-        asset.output.gain.cancelScheduledValues(now);
-        asset.output.gain.setValueAtTime(0, now);
-
-        asset.output.gain.linearRampToValueAtTime(
-          clamp(settings.volume, 0, 1),
-          now + Math.max(0.01, settings.volumeFade)
-        );
-
-        asset.source = source;
-
-        source.onended = () => {
-          source.disconnect();
-
-          if (asset.source === source) {
-            asset.source = null;
-          }
-        };
-
-        source.start(now);
-      }
-
-      if (asset.buffer) {
-        play();
+      if (assets.ambient.buffer) {
+        startRequestedLoops();
       } else {
-        decode(asset).then(play);
+        decode(assets.ambient).then(startRequestedLoops);
       }
     }
 
@@ -2288,7 +2294,7 @@
     function finishStep(record) {
       hide(record.step);
 
-      // Revert only after hiding to avoid visible kerning changes.
+      // Avoid visible kerning changes when removing letter wrappers.
       record.splits.forEach(split => split.revert());
       records.delete(record.step);
     }
@@ -2297,7 +2303,6 @@
       const step = items[2];
       const svg = step.querySelector("svg");
 
-      // Sort by horizontal position, not SVG source order.
       const bars = Array.from(
         svg?.querySelectorAll("rect") || []
       ).sort(
@@ -2318,7 +2323,6 @@
 
       const maximum = Math.max(wave.height, ...heights);
 
-      // Give the growing bars enough vertical space.
       if (svg && bars.length) {
         const box = svg.viewBox.baseVal;
 
@@ -2345,12 +2349,11 @@
         svg.setAttribute("focusable", "false");
       }
 
-      // Every bar begins invisible.
       gsap.set(bars, { opacity: 0 });
 
       timeline.call(() => show(step));
 
-      // Fade in from left to right.
+      // Reveal the bars from left to right.
       if (bars.length) {
         timeline.to(bars, {
           opacity: 1,
@@ -2363,7 +2366,6 @@
         });
       }
 
-      // The wave starts after the final bar finishes fading in.
       timeline.to({}, {
         duration: wave.delay
       });
@@ -2420,7 +2422,7 @@
         duration: wave.hold
       });
 
-      // Fade out from left to right after the wave finishes.
+      // Hide the bars from left to right.
       if (bars.length) {
         timeline.to(bars, {
           opacity: 0,
@@ -2433,7 +2435,6 @@
         });
       }
 
-      // Hide the step only after the last bar disappears.
       timeline.call(() => hide(step));
     }
 
@@ -2450,7 +2451,6 @@
       observer.disconnect();
       form.removeEventListener("submit", onSubmit, true);
 
-      // Preserve the form layout during its exit animation.
       formWrap.classList.add("is-success-exiting");
 
       if (items[1].contains(document.activeElement)) {
@@ -2468,10 +2468,8 @@
       const second = records.get(items[1]);
       const timeline = gsap.timeline();
 
-      // Second-step title exits first.
       exitText(timeline, second);
 
-      // Then fade the form.
       timeline.to(formTarget, {
         autoAlpha: 0,
         duration: reduced ? 0.2 : options.formFade,
@@ -2487,14 +2485,12 @@
         duration: options.gap
       });
 
-      // Third step.
       addWave(timeline);
 
       timeline.to({}, {
         duration: wave.finalDelay
       });
 
-      // Fourth step remains visible.
       enter(timeline, prepare(items[3]));
 
       timeline.call(() => {
@@ -2506,7 +2502,7 @@
     function onSubmit() {
       submitted = true;
 
-      // Webflow retains control of validation and submission.
+      // Webflow handles validation and the submission request.
       queueMicrotask(checkSuccess);
     }
 
@@ -2520,10 +2516,6 @@
 
       formWrap.classList.add("reception-sequence-form");
 
-      /*
-       * Hide the default success message visually.
-       * Its display state still signals Webflow submission success.
-       */
       const style = document.createElement("style");
 
       style.textContent = `
@@ -2726,6 +2718,16 @@
     );
 
     if (cornerButton) {
+      // Keep the control above the popup.
+      Object.assign(cornerButton.style, {
+        zIndex: "10002",
+        pointerEvents: "auto"
+      });
+
+      if (getComputedStyle(cornerButton).position === "static") {
+        cornerButton.style.position = "relative";
+      }
+
       gsap.set(cornerButton, { autoAlpha: 0 });
 
       cornerButton.disabled = true;
@@ -2733,7 +2735,7 @@
     }
 
     function updateCornerButton() {
-      if (!cornerButton || pickedUp) return;
+      if (!cornerButton) return;
 
       const enabled = sound.isEnabled();
       const action = enabled ? "Mute sound" : "Enable sound";
@@ -2780,7 +2782,6 @@
 
     function requestSound() {
       if (
-        pickedUp ||
         soundPending ||
         sound.isEnabled()
       ) return;
@@ -2863,7 +2864,7 @@
     function onCornerClick(event) {
       event.preventDefault();
 
-      if (pickedUp || soundPending) return;
+      if (soundPending) return;
 
       if (sound.isEnabled()) {
         sound.disable();
@@ -2893,18 +2894,8 @@
 
       sound.fadeOutAll(SETTINGS.pickup.soundFade);
 
-      if (cornerButton) {
-        cornerButton.removeEventListener("click", onCornerClick);
-        cornerButton.disabled = true;
-        cornerButton.inert = true;
-        cornerButton.setAttribute("aria-hidden", "true");
-
-        gsap.to(cornerButton, {
-          autoAlpha: 0,
-          duration: SETTINGS.cornerFade,
-          overwrite: true
-        });
-      }
+      // The sound control remains visible and interactive.
+      updateCornerButton();
 
       popup.inert = false;
       popup.removeAttribute("aria-hidden");
