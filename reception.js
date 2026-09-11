@@ -16,9 +16,9 @@
     },
 
     ambient: {
-      delay: 0.5,
-      videoFade: 1.5,
-      volumeFade: 3,
+      delay: 0,
+      videoFade: 1,
+      volumeFade: 2,
       volume: 0.35,
       loop: true
     },
@@ -29,26 +29,26 @@
     },
 
     steps: {
-      delay: 0,
-      enter: 0.7,
-      exit: 0.5,
-      stagger: 0.025,
+      delay: 0.15,
+      enter: 0.5,
+      exit: 0.3,
+      stagger: 0.015,
       blur: 8,
       scale: 0.98,
-      gap: 0.2,
-      formDelay: 0.15,
-      formFade: 0.6
+      gap: 0.1,
+      formDelay: 0.08,
+      formFade: 0.35
     },
 
     wave: {
-      fadeIn: 0.4,
-      barStagger: 0.045,
-      delay: 0.15,
-      duration: 2,
+      fadeIn: 0.25,
+      barStagger: 0.025,
+      delay: 0.05,
+      duration: 1.2,
       height: 56,
-      hold: 0.25,
-      fadeOut: 0.5,
-      finalDelay: 0.2
+      hold: 0.1,
+      fadeOut: 0.25,
+      finalDelay: 0.1
     },
 
     phone: {
@@ -248,17 +248,15 @@
     };
   }
 
-  // Audio: notification stage and ambient stage.
+  // Audio.
 
   function createSoundManager(options) {
     let context = null;
     let enabled = false;
     let typingRequested = false;
-
     let backgroundOutput = null;
     let masterOutput = null;
     let backgroundLevel = 1;
-
     let finished = false;
     let ambientSettings = null;
     let oldAudioTimer = null;
@@ -349,7 +347,6 @@
       const source = context.createBufferSource();
 
       source.buffer = asset.buffer;
-
       source.loop = asset === assets.ambient
         ? ambientSettings.loop
         : true;
@@ -455,7 +452,6 @@
 
       source.buffer = assets.ping.buffer;
       source.connect(assets.ping.output);
-
       pingSources.add(source);
 
       source.onended = () => {
@@ -580,9 +576,7 @@
 
             enabled = success;
 
-            if (enabled) {
-              startRequestedLoops();
-            }
+            if (enabled) startRequestedLoops();
 
             resolve(success);
           }
@@ -661,7 +655,6 @@
       const now = context.currentTime;
 
       masterOutput.gain.cancelScheduledValues(now);
-
       masterOutput.gain.setValueAtTime(
         masterOutput.gain.value,
         now
@@ -735,9 +728,7 @@
         item.getAttribute("data-notification-count") !== "true"
       ) continue;
 
-      const badge = item.querySelector(
-        ".notification-type__badge"
-      );
+      const badge = item.querySelector(".notification-type__badge");
 
       if (!badge) continue;
 
@@ -1158,7 +1149,6 @@
       if (!active) return;
 
       const origin = phoneZone.getOrigin(list);
-
       const x = event.clientX - origin.x;
       const y = event.clientY - origin.y;
 
@@ -1660,7 +1650,6 @@
 
           gsap.killTweensOf(item);
           gsap.set(item, { autoAlpha: 0, y: 0 });
-
           return;
         }
 
@@ -2078,7 +2067,6 @@
           button.inert = false;
           button.removeAttribute("aria-hidden");
 
-          // Reveal the label alongside the button.
           if (label) {
             gsap.to(label, {
               autoAlpha: 0.5,
@@ -2122,7 +2110,6 @@
         const targets = label ? [button, label] : [button];
 
         gsap.killTweensOf(targets);
-
         button.inert = true;
 
         gsap.to(targets, {
@@ -2142,7 +2129,7 @@
     };
   }
 
-  // Three popup steps:
+  // Popup steps:
   // 1. Title and form.
   // 2. SVG wave.
   // 3. Final text.
@@ -2217,7 +2204,6 @@
         step.querySelectorAll("[data-step-title]")
       );
 
-      // Do not split headings inside Webflow's form messages.
       const titles = (
         marked.length
           ? marked
@@ -2289,7 +2275,7 @@
     function finishStep(record) {
       hide(record.step);
 
-      // Remove letter wrappers only after the step is hidden.
+      // Revert only after hiding to avoid visible kerning changes.
       record.splits.forEach(split => split.revert());
       records.delete(record.step);
     }
@@ -2348,7 +2334,6 @@
 
       timeline.call(() => show(step));
 
-      // Fade in from left to right.
       if (bars.length) {
         timeline.to(bars, {
           opacity: 1,
@@ -2417,7 +2402,6 @@
         duration: wave.hold
       });
 
-      // Fade out from left to right.
       if (bars.length) {
         timeline.to(bars, {
           opacity: 0,
@@ -2446,7 +2430,6 @@
       observer.disconnect();
       form.removeEventListener("submit", onSubmit, true);
 
-      // Keep the form in layout while its exit animation runs.
       formWrap.classList.add("is-success-exiting");
 
       if (formStep.contains(document.activeElement)) {
@@ -2464,7 +2447,6 @@
       const record = records.get(formStep);
       const timeline = gsap.timeline();
 
-      // First the title exits, then the form.
       exitText(timeline, record);
 
       timeline.to(formTarget, {
@@ -2498,8 +2480,6 @@
 
     function onSubmit() {
       submitted = true;
-
-      // Webflow handles validation and the submission request.
       queueMicrotask(checkSuccess);
     }
 
@@ -2554,7 +2534,6 @@
           delay: options.delay
         });
 
-        // Reveal the first title, followed by its form.
         enter(timeline, prepare(formStep));
 
         if (formTarget) {
@@ -2571,8 +2550,6 @@
             }
           }, `+=${options.formDelay}`);
         }
-
-        // No automatic exit: wait for confirmed submission success.
       }
     };
   }
@@ -2762,10 +2739,7 @@
     }
 
     function requestSound() {
-      if (
-        soundPending ||
-        sound.isEnabled()
-      ) return;
+      if (soundPending || sound.isEnabled()) return;
 
       soundPending = true;
       updateCornerButton();
@@ -2874,8 +2848,6 @@
       phone.stop?.();
 
       sound.fadeOutAll(SETTINGS.pickup.soundFade);
-
-      // The sound control remains available throughout the popup.
       updateCornerButton();
 
       popup.inert = false;
@@ -2886,6 +2858,7 @@
 
       const transition = gsap.timeline();
 
+      // Backdrop and popup begin immediately.
       transition.to(backdrop, {
         autoAlpha: 1,
         "--ambient-blur": `${SETTINGS.backdrop.blur}px`,
@@ -2909,6 +2882,7 @@
         }
       }, 0);
 
+      // Default is zero: video and ambient audio start on pickup.
       const videoDelay = Math.max(
         0,
         SETTINGS.ambient.delay
@@ -2934,16 +2908,17 @@
             ? 0
             : SETTINGS.ambient.videoFade,
           ease: "power2.inOut",
-          overwrite: true,
-          onComplete: () => steps.start()
+          overwrite: true
         }, videoDelay);
-      } else {
-        transition.call(
-          () => steps.start(),
-          [],
-          videoDelay
-        );
       }
+
+      // Start the text sequence alongside the video.
+      // SETTINGS.steps.delay supplies the slight text delay.
+      transition.call(
+        () => steps.start(),
+        [],
+        videoDelay
+      );
     }
 
     phoneButton?.addEventListener("click", onPickup);
