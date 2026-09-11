@@ -30,7 +30,6 @@
 
     steps: {
       delay: 0,
-      hold: 1.8,
       enter: 0.7,
       exit: 0.5,
       stagger: 0.025,
@@ -56,8 +55,7 @@
       delay: 4,
       revealDuration: 0.4,
       proximityRadius: 300,
-      volumeFade: 0.18,
-      labelFade: 0.25
+      volumeFade: 0.18
     },
 
     counter: {
@@ -366,7 +364,6 @@
 
       if (fade > 0) {
         asset.output.gain.setValueAtTime(0, now);
-
         asset.output.gain.linearRampToValueAtTime(
           volume,
           now + fade
@@ -391,7 +388,6 @@
     function startRequestedLoops() {
       if (!enabled || context?.state !== "running") return;
 
-      // Once picked up, only ambient audio can restart.
       if (finished) {
         if (ambientSettings) {
           startLoop(
@@ -522,7 +518,6 @@
 
       context = new AudioContextClass();
 
-      // This output controls only the pre-pickup sounds.
       masterOutput = context.createGain();
       masterOutput.gain.value = finished ? 0 : 1;
       masterOutput.connect(context.destination);
@@ -659,7 +654,6 @@
     function fadeOutAll(duration) {
       if (finished) return;
 
-      // Preserve the visitor's enabled/muted preference.
       finished = true;
 
       if (!context) return;
@@ -687,7 +681,6 @@
         now + duration
       );
 
-      // Only clean up the old sounds, not ambient audio.
       oldAudioTimer = window.setTimeout(
         stopOldAudio,
         duration * 1000 + 50
@@ -695,7 +688,6 @@
     }
 
     function startAmbient(settings) {
-      // Remember the request even if the visitor is muted.
       ambientSettings = settings;
       assets.ambient.volume = settings.volume;
 
@@ -1858,7 +1850,7 @@
     };
   }
 
-  // Phone reveal, ringing, label and proximity.
+  // Phone button and always-visible label.
 
   function createPhone(options, sound, onProximity) {
     const button = select(".phone-btn");
@@ -1900,7 +1892,6 @@
     let frame = null;
     let focused = false;
     let fallbackTimer = null;
-    let labelVisible = false;
     let revealTimer = null;
 
     if (label) {
@@ -1912,19 +1903,6 @@
     button.inert = true;
     button.setAttribute("aria-hidden", "true");
     button.classList.remove("is-ringing");
-
-    function setLabelVisible(show) {
-      if (!label || show === labelVisible) return;
-
-      labelVisible = show;
-
-      gsap.to(label, {
-        autoAlpha: show ? 0.5 : 0,
-        duration: motionPreference.matches ? 0 : options.labelFade,
-        ease: "power2.out",
-        overwrite: true
-      });
-    }
 
     function updateVolume() {
       frame = null;
@@ -1955,8 +1933,6 @@
             )
           )
         : Infinity;
-
-      setLabelVisible(onScreen && distance <= radius);
 
       const t = clamp(distance / radius, 0, 1);
 
@@ -2102,6 +2078,18 @@
           button.inert = false;
           button.removeAttribute("aria-hidden");
 
+          // Reveal the label alongside the button.
+          if (label) {
+            gsap.to(label, {
+              autoAlpha: 0.5,
+              duration: motionPreference.matches
+                ? 0
+                : options.revealDuration,
+              ease: "power2.out",
+              overwrite: true
+            });
+          }
+
           gsap.to(button, {
             autoAlpha: 1,
             duration: motionPreference.matches
@@ -2136,7 +2124,6 @@
         gsap.killTweensOf(targets);
 
         button.inert = true;
-        labelVisible = false;
 
         gsap.to(targets, {
           autoAlpha: 0,
@@ -2155,12 +2142,17 @@
     };
   }
 
-  // Popup steps, successful submission and SVG wave.
+  // Three popup steps:
+  // 1. Title and form.
+  // 2. SVG wave.
+  // 3. Final text.
 
   function createSteps(popup) {
     const items = Array.from(
       popup?.querySelectorAll(".genius-ambient-popup__step") || []
     );
+
+    const [formStep, waveStep, finalStep] = items;
 
     const options = SETTINGS.steps;
     const wave = SETTINGS.wave;
@@ -2171,12 +2163,12 @@
 
     const records = new Map();
 
-    const formWrap = items[1]?.querySelector(".w-form");
+    const formWrap = formStep?.querySelector(".w-form");
     const form = formWrap?.querySelector("form");
     const success = formWrap?.querySelector(".w-form-done");
 
     const formTarget =
-      formWrap || items[1]?.querySelector("form");
+      formWrap || formStep?.querySelector("form");
 
     let started = false;
     let ready = false;
@@ -2225,11 +2217,14 @@
         step.querySelectorAll("[data-step-title]")
       );
 
-      const titles = marked.length
-        ? marked
-        : Array.from(
-            step.querySelectorAll("h1,h2,h3,h4,h5,h6")
-          );
+      // Do not split headings inside Webflow's form messages.
+      const titles = (
+        marked.length
+          ? marked
+          : Array.from(
+              step.querySelectorAll("h1,h2,h3,h4,h5,h6")
+            )
+      ).filter(title => !title.closest(".w-form, form"));
 
       const splits = [];
 
@@ -2294,13 +2289,13 @@
     function finishStep(record) {
       hide(record.step);
 
-      // Avoid visible kerning changes when removing letter wrappers.
+      // Remove letter wrappers only after the step is hidden.
       record.splits.forEach(split => split.revert());
       records.delete(record.step);
     }
 
     function addWave(timeline) {
-      const step = items[2];
+      const step = waveStep;
       const svg = step.querySelector("svg");
 
       const bars = Array.from(
@@ -2353,7 +2348,7 @@
 
       timeline.call(() => show(step));
 
-      // Reveal the bars from left to right.
+      // Fade in from left to right.
       if (bars.length) {
         timeline.to(bars, {
           opacity: 1,
@@ -2422,7 +2417,7 @@
         duration: wave.hold
       });
 
-      // Hide the bars from left to right.
+      // Fade out from left to right.
       if (bars.length) {
         timeline.to(bars, {
           opacity: 0,
@@ -2451,13 +2446,14 @@
       observer.disconnect();
       form.removeEventListener("submit", onSubmit, true);
 
+      // Keep the form in layout while its exit animation runs.
       formWrap.classList.add("is-success-exiting");
 
-      if (items[1].contains(document.activeElement)) {
+      if (formStep.contains(document.activeElement)) {
         document.activeElement.blur();
       }
 
-      items[1].inert = true;
+      formStep.inert = true;
 
       if (!popup.hasAttribute("tabindex")) {
         popup.setAttribute("tabindex", "-1");
@@ -2465,10 +2461,11 @@
 
       popup.focus({ preventScroll: true });
 
-      const second = records.get(items[1]);
+      const record = records.get(formStep);
       const timeline = gsap.timeline();
 
-      exitText(timeline, second);
+      // First the title exits, then the form.
+      exitText(timeline, record);
 
       timeline.to(formTarget, {
         autoAlpha: 0,
@@ -2477,7 +2474,7 @@
       });
 
       timeline.call(() => {
-        finishStep(second);
+        finishStep(record);
         formWrap.classList.remove("is-success-exiting");
       });
 
@@ -2491,11 +2488,11 @@
         duration: wave.finalDelay
       });
 
-      enter(timeline, prepare(items[3]));
+      enter(timeline, prepare(finalStep));
 
       timeline.call(() => {
-        items[3].setAttribute("tabindex", "-1");
-        items[3].focus({ preventScroll: true });
+        finalStep.setAttribute("tabindex", "-1");
+        finalStep.focus({ preventScroll: true });
       });
     }
 
@@ -2506,7 +2503,7 @@
       queueMicrotask(checkSuccess);
     }
 
-    if (form && success && items[2] && items[3]) {
+    if (form && success && waveStep && finalStep) {
       const display = getComputedStyle(form).display;
 
       formWrap.style.setProperty(
@@ -2557,40 +2554,25 @@
           delay: options.delay
         });
 
-        const first = prepare(items[0]);
+        // Reveal the first title, followed by its form.
+        enter(timeline, prepare(formStep));
 
-        enter(timeline, first);
+        if (formTarget) {
+          timeline.to(formTarget, {
+            autoAlpha: 1,
+            duration: reduced ? 0.2 : options.formFade,
+            ease: "power2.out",
 
-        timeline.to({}, {
-          duration: options.hold
-        });
+            onComplete() {
+              formTarget.inert = false;
+              ready = true;
 
-        exitText(timeline, first);
-
-        timeline.call(() => finishStep(first));
-
-        if (items[1]) {
-          timeline.to({}, {
-            duration: options.gap
-          });
-
-          enter(timeline, prepare(items[1]));
-
-          if (formTarget) {
-            timeline.to(formTarget, {
-              autoAlpha: 1,
-              duration: reduced ? 0.2 : options.formFade,
-              ease: "power2.out",
-
-              onComplete() {
-                formTarget.inert = false;
-                ready = true;
-
-                if (observer) checkSuccess();
-              }
-            }, `+=${options.formDelay}`);
-          }
+              if (observer) checkSuccess();
+            }
+          }, `+=${options.formDelay}`);
         }
+
+        // No automatic exit: wait for confirmed submission success.
       }
     };
   }
@@ -2718,7 +2700,6 @@
     );
 
     if (cornerButton) {
-      // Keep the control above the popup.
       Object.assign(cornerButton.style, {
         zIndex: "10002",
         pointerEvents: "auto"
@@ -2894,7 +2875,7 @@
 
       sound.fadeOutAll(SETTINGS.pickup.soundFade);
 
-      // The sound control remains visible and interactive.
+      // The sound control remains available throughout the popup.
       updateCornerButton();
 
       popup.inert = false;
