@@ -16,7 +16,7 @@
     },
 
     ambient: {
-      delay: 0.15,
+      delay: 0,
       videoFade: 1,
       volumeFade: 2,
       volume: 0.35,
@@ -29,7 +29,7 @@
     },
 
     steps: {
-      delay: 0.5,
+      delay: 0.15,
       enter: 0.5,
       exit: 0.3,
       stagger: 0.015,
@@ -95,8 +95,10 @@
     trail: {
       minWidth: 992,
       moveDistance: 15,
-      stopDuration: 350,
-      trailLength: 8
+      stopDuration: 800,
+      trailLength: 8,
+      enterDuration: 0.45,
+      enterEase: "sine.out"
     },
 
     random: {
@@ -361,6 +363,7 @@
 
       if (fade > 0) {
         asset.output.gain.setValueAtTime(0, now);
+
         asset.output.gain.linearRampToValueAtTime(
           volume,
           now + fade
@@ -655,6 +658,7 @@
       const now = context.currentTime;
 
       masterOutput.gain.cancelScheduledValues(now);
+
       masterOutput.gain.setValueAtTime(
         masterOutput.gain.value,
         now
@@ -1132,13 +1136,15 @@
         exitItem(activeItems[0]);
       }
 
+      // Slower, softer entrance.
       gsap.fromTo(item, {
         autoAlpha: 0,
         ...(useScale ? { scale: 0.8 } : {})
       }, {
         autoAlpha: 1,
         ...(useScale ? { scale: 1 } : {}),
-        duration: 0.2,
+        duration: options.enterDuration,
+        ease: options.enterEase,
         overwrite: true
       });
 
@@ -1650,6 +1656,7 @@
 
           gsap.killTweensOf(item);
           gsap.set(item, { autoAlpha: 0, y: 0 });
+
           return;
         }
 
@@ -1804,7 +1811,7 @@
     });
 
     if (window.ResizeObserver) {
-      observer = new ResizeObserver(() => {
+      observer observer = new ResizeObserver(() => {
         scheduleLayout(true);
       });
 
@@ -2275,7 +2282,7 @@
     function finishStep(record) {
       hide(record.step);
 
-      // Revert only after hiding to avoid visible kerning changes.
+      // Remove letter wrappers only after hiding the step.
       record.splits.forEach(split => split.revert());
       records.delete(record.step);
     }
@@ -2858,7 +2865,6 @@
 
       const transition = gsap.timeline();
 
-      // Backdrop and popup begin immediately.
       transition.to(backdrop, {
         autoAlpha: 1,
         "--ambient-blur": `${SETTINGS.backdrop.blur}px`,
@@ -2882,7 +2888,6 @@
         }
       }, 0);
 
-      // Default is zero: video and ambient audio start on pickup.
       const videoDelay = Math.max(
         0,
         SETTINGS.ambient.delay
@@ -2912,8 +2917,8 @@
         }, videoDelay);
       }
 
-      // Start the text sequence alongside the video.
-      // SETTINGS.steps.delay supplies the slight text delay.
+      // Text begins after SETTINGS.steps.delay,
+      // without waiting for the video fade to finish.
       transition.call(
         () => steps.start(),
         [],
