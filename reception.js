@@ -69,22 +69,26 @@
       pingUrl:
         AUDIO_PATH +
         "6a9bc5637521c66b5c85d17d_Reception-Ping.mp3",
+
       pingVolume: 0.5,
 
       typingUrl:
         AUDIO_PATH +
         "6a9d71768425ed54cd3b20cb_Reception-Typing.mp3",
+
       typingVolume: 0.35,
 
       streetUrl:
         AUDIO_PATH +
         "6a9d7944f79d96f6c8c13b37_Reception-StreetNoise.mp3",
+
       streetVolume: 0.4,
       streetFadeDuration: 4,
 
       ringUrl:
         AUDIO_PATH +
         "6a9e6cc17058d12cadbd78fb_Reception-Ring.mp3",
+
       ringVolume: 0.6,
 
       ambientUrl:
@@ -116,17 +120,20 @@
       edgePadding: 24,
       scatter: 0.7,
 
-      // Mobile layout is selected when positions are first assigned.
+      // Mobile mode is selected when positions are first assigned.
       mobileBreakpoint: 768,
 
-      // Minimum gap between measured mobile card rectangles.
-      mobileGap: 24,
+      // Preferred spacing; limited overlap is allowed when needed.
+      mobileGap: 12,
 
-      // Lower values spread the collection across a larger field.
-      mobileCoverage: 0.32,
+      // Target number of fully or partially visible notifications.
+      mobileVisibleTarget: 9,
 
-      // Minimum mobile field width relative to its container.
-      mobileFieldWidth: 1.4
+      // Maximum overlap relative to the smaller card's area.
+      mobileMaxOverlap: 0.22,
+
+      // At least 55% of each selected card must be inside the viewport.
+      mobileMinVisible: 0.55
     }
   };
 
@@ -152,7 +159,9 @@
   function readNumber(element, attribute, fallback, minimum = 0) {
     const raw = element?.getAttribute(attribute);
 
-    if (raw == null || raw.trim() === "") return fallback;
+    if (raw == null || raw.trim() === "") {
+      return fallback;
+    }
 
     const value = Number(raw);
 
@@ -270,6 +279,7 @@
           left: origin.x + candidate.x,
           top: origin.y + candidate.y,
           right: origin.x + candidate.x + candidate.width,
+
           bottom:
             origin.y +
             candidate.y +
@@ -311,18 +321,22 @@
         url: options.pingUrl,
         volume: options.pingVolume
       },
+
       typing: {
         url: options.typingUrl,
         volume: options.typingVolume
       },
+
       street: {
         url: options.streetUrl,
         volume: options.streetVolume
       },
+
       ring: {
         url: options.ringUrl,
         volume: options.ringVolume
       },
+
       ambient: {
         url: options.ambientUrl,
         volume: 0
@@ -360,6 +374,7 @@
         asset.decodePromise = preload(asset)
           .then(bytes => {
             if (!bytes) return null;
+
             return context.decodeAudioData(bytes.slice(0));
           })
           .then(buffer => {
@@ -393,8 +408,11 @@
       const source = context.createBufferSource();
 
       source.buffer = asset.buffer;
+
       source.loop =
-        asset === assets.ambient ? ambientSettings.loop : true;
+        asset === assets.ambient
+          ? ambientSettings.loop
+          : true;
 
       source.connect(asset.output);
 
@@ -406,6 +424,7 @@
 
       if (fade > 0) {
         asset.output.gain.setValueAtTime(0, now);
+
         asset.output.gain.linearRampToValueAtTime(
           volume,
           now + fade
@@ -428,7 +447,9 @@
     }
 
     function startRequestedLoops() {
-      if (!enabled || context?.state !== "running") return;
+      if (!enabled || context?.state !== "running") {
+        return;
+      }
 
       if (finished) {
         if (ambientSettings) {
@@ -441,7 +462,10 @@
         return;
       }
 
-      startLoop(assets.street, options.streetFadeDuration);
+      startLoop(
+        assets.street,
+        options.streetFadeDuration
+      );
 
       if (typingRequested) {
         startLoop(assets.typing);
@@ -652,6 +676,7 @@
       } catch (error) {
         enabled = false;
         console.warn("Could not enable audio:", error);
+
         return Promise.resolve(false);
       }
     }
@@ -659,6 +684,7 @@
     function stopAsset(asset) {
       if (asset.source) {
         const source = asset.source;
+
         asset.source = null;
         source.stop();
       }
@@ -710,6 +736,7 @@
       const now = context.currentTime;
 
       masterOutput.gain.cancelScheduledValues(now);
+
       masterOutput.gain.setValueAtTime(
         masterOutput.gain.value,
         now
@@ -754,6 +781,7 @@
       ping,
       playRing,
       setBackgroundLevel,
+
       isEnabled: () =>
         enabled && context?.state === "running"
     };
@@ -777,7 +805,11 @@
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    const minInterval = Math.max(0.05, options.minInterval);
+    const minInterval = Math.max(
+      0.05,
+      options.minInterval
+    );
+
     const maxInterval = Math.max(
       minInterval,
       options.maxInterval
@@ -852,6 +884,7 @@
 
       gsap.set(badge, {
         autoAlpha: 0,
+
         y:
           originalY +
           (reducedMotion ? 0 : options.badgeMoveDown)
@@ -866,7 +899,11 @@
       gsap.to(record.badge, {
         autoAlpha: 1,
         y: record.originalY,
-        duration: reducedMotion ? 0 : options.badgeDuration,
+
+        duration: reducedMotion
+          ? 0
+          : options.badgeDuration,
+
         ease: "power2.out",
         overwrite: "auto"
       });
@@ -975,6 +1012,7 @@
       stop() {
         stopped = true;
         clearTimeout(timer);
+
         timer = null;
         bag = [];
       }
@@ -1051,7 +1089,9 @@
 
         nextIndex = (nextIndex + 1) % items.length;
 
-        if (!retained.has(item)) return item;
+        if (!retained.has(item)) {
+          return item;
+        }
       }
 
       return null;
@@ -1064,7 +1104,9 @@
       retained.delete(item);
       visibleItems.delete(item);
 
-      activeItems = activeItems.filter(value => value !== item);
+      activeItems = activeItems.filter(
+        value => value !== item
+      );
 
       gsap.set(item, {
         autoAlpha: 0,
@@ -1094,7 +1136,10 @@
       if (!item || retained.has(item)) return;
 
       timestamps.delete(item);
-      activeItems = activeItems.filter(value => value !== item);
+
+      activeItems = activeItems.filter(
+        value => value !== item
+      );
 
       if (!useFall) {
         gsap.to(item, {
@@ -1144,7 +1189,9 @@
         overwrite: "auto",
 
         onUpdate() {
-          if (phoneZone.overlaps(item.getBoundingClientRect())) {
+          if (
+            phoneZone.overlaps(item.getBoundingClientRect())
+          ) {
             hideImmediately(item);
           }
         },
@@ -1183,7 +1230,11 @@
       gsap.killTweensOf(item);
 
       if (useFall) {
-        gsap.set(item, { x: 0, y: 0, rotation: 0 });
+        gsap.set(item, {
+          x: 0,
+          y: 0,
+          rotation: 0
+        });
       }
 
       gsap.set(item, {
@@ -1193,7 +1244,11 @@
       });
 
       timestamps.delete(item);
-      activeItems = activeItems.filter(value => value !== item);
+
+      activeItems = activeItems.filter(
+        value => value !== item
+      );
+
       visibleItems.add(item);
 
       const shouldStay =
@@ -1349,7 +1404,11 @@
 
         trigger.kill();
 
-        document.removeEventListener("visibilitychange", sync);
+        document.removeEventListener(
+          "visibilitychange",
+          sync
+        );
+
         window.removeEventListener("resize", sync);
         window.removeEventListener("scroll", clearPhoneArea, true);
 
@@ -1362,6 +1421,7 @@
         });
 
         activeItems = [];
+
         timestamps.clear();
         retained.clear();
         visibleItems.clear();
@@ -1369,8 +1429,7 @@
     };
   }
 
-  // Random notifications:
-  // positions are generated once and never shuffled on resize.
+  // Random notifications
 
   function createRandomNotifications(options, sound, phoneZone) {
     const wrapper = select("[data-random-wrapper]");
@@ -1403,14 +1462,16 @@
     let popupTimer = null;
     let observer = null;
 
-    let hiddenAt = document.hidden ? performance.now() : null;
+    let hiddenAt = document.hidden
+      ? performance.now()
+      : null;
 
     const placementsByItem = new Map();
     const shown = new Set();
     const entrances = new Map();
     const blocked = new Set();
 
-    // Off-screen cards must not create a scrollable overflow area.
+    // Off-screen cards do not create additional scrollable overflow.
     wrapper.style.overflow = "clip";
 
     gsap.set(items, {
@@ -1448,12 +1509,16 @@
         }
 
         hiddenAt = null;
+
         popupTimer?.resume();
         scheduleSafetyCheck();
       }
     }
 
-    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener(
+      "visibilitychange",
+      onVisibility
+    );
 
     function createSlots(count, width, height) {
       const columns = Math.max(
@@ -1461,7 +1526,11 @@
         Math.round(Math.sqrt((count * width) / height))
       );
 
-      const rows = Math.max(1, Math.ceil(count / columns));
+      const rows = Math.max(
+        1,
+        Math.ceil(count / columns)
+      );
+
       const slots = [];
 
       for (let row = 0; row < rows; row++) {
@@ -1510,7 +1579,9 @@
           }
         });
 
-        result.push(remaining.splice(bestIndex, 1)[0]);
+        result.push(
+          remaining.splice(bestIndex, 1)[0]
+        );
       }
 
       return result;
@@ -1568,91 +1639,103 @@
       );
     }
 
-    function buildMobileLayout(width, height, origin, zone, sizes) {
+    function buildMobileLayout(
+      width,
+      height,
+      origin,
+      zone,
+      sizes
+    ) {
       const gap = Math.max(0, options.mobileGap);
-      const coverage = clamp(options.mobileCoverage, 0.1, 0.8);
 
-      const area = sizes.reduce(
-        (sum, size) =>
-          sum +
-          (size.width + gap) *
-            (size.height + entranceMove + gap),
-        0
-      );
-
-      const expansion = Math.max(
-        1,
-        Math.sqrt(area / (width * height * coverage))
-      );
-
-      const fieldWidth =
-        width * Math.max(options.mobileFieldWidth, expansion);
-
-      const fieldHeight = height * expansion;
-
-      const offsetX = (width - fieldWidth) / 2;
-      const offsetY = (height - fieldHeight) / 2;
-
-      const slots = createSlots(
+      const target = Math.min(
         items.length,
-        fieldWidth,
-        fieldHeight
+        Math.max(1, Math.round(options.mobileVisibleTarget))
       );
 
-      // Start near the viewport, then work outward.
-      slots.sort(
-        (a, b) =>
-          Math.hypot(a.x - 0.5, a.y - 0.5) -
-          Math.hypot(b.x - 0.5, b.y - 0.5)
+      const maxOverlap = clamp(
+        options.mobileMaxOverlap,
+        0,
+        0.5
       );
 
-      // Pair each area with the opposite side for balance.
-      const ordered = [];
+      const minVisible = clamp(
+        options.mobileMinVisible,
+        0.2,
+        1
+      );
 
-      while (slots.length) {
-        const first = slots.shift();
-        ordered.push(first);
-
-        if (!slots.length) break;
-
-        let nearest = 0;
-
-        slots.forEach((slot, i) => {
-          const distance = value =>
-            (value.x + first.x - 1) ** 2 +
-            (value.y + first.y - 1) ** 2;
-
-          if (distance(slot) < distance(slots[nearest])) {
-            nearest = i;
-          }
-        });
-
-        ordered.push(slots.splice(nearest, 1)[0]);
-      }
+      const slots = orderSlots(
+        createSlots(target, width, height)
+      );
 
       const placed = [];
+      const visibleItems = [];
+      const overflowItems = [];
 
-      items.forEach((item, i) => {
-        const size = sizes[i];
+      const sizeByItem = new Map(
+        items.map((item, i) => [item, sizes[i]])
+      );
+
+      function visibleArea(candidate) {
+        const w = Math.max(
+          0,
+          Math.min(width, candidate.x + candidate.width) -
+            Math.max(0, candidate.x)
+        );
+
+        const h = Math.max(
+          0,
+          Math.min(height, candidate.y + candidate.height) -
+            Math.max(0, candidate.y)
+        );
+
+        return w * h;
+      }
+
+      function save(item, candidate) {
+        placementsByItem.set(item, candidate);
+
+        gsap.set(item, {
+          left: candidate.x,
+          top: candidate.y
+        });
+      }
+
+      // Fill the visible composition before placing overflow items.
+      for (const item of items) {
+        const size = sizeByItem.get(item);
 
         if (!size.width || !size.height) {
           placementsByItem.set(item, null);
-          return;
+          continue;
         }
 
-        const slot = ordered[i];
+        if (visibleItems.length >= target) {
+          overflowItems.push(item);
+          continue;
+        }
 
-        const targetX =
-          offsetX + slot.x * fieldWidth - size.width / 2;
+        const slot = slots[visibleItems.length];
 
-        const targetY =
-          offsetY + slot.y * fieldHeight - size.height / 2;
+        const centerX = slot.x * width;
+        const centerY = slot.y * height;
 
         let best = null;
-        let score = Infinity;
+        let bestScore = Infinity;
 
         function consider(x, y) {
-          const candidate = { x, y, ...size };
+          const candidate = {
+            x,
+            y,
+            ...size
+          };
+
+          const fraction =
+            visibleArea(candidate) /
+            (size.width * size.height);
+
+          if (fraction < minVisible) return;
 
           if (
             phoneZone.blocksPlacement(
@@ -1665,79 +1748,146 @@
             return;
           }
 
-          const collides = placed.some(other => !(
-            x + size.width + gap <= other.x ||
-            other.x + other.width + gap <= x ||
-            y + size.height + entranceMove + gap <= other.y ||
-            other.y + other.height + entranceMove + gap <= y
-          ));
-
-          if (collides) return;
-
-          const distance = Math.hypot(
-            x - targetX,
-            y - targetY
+          const overlap = getOverlap(
+            candidate,
+            placed
           );
 
-          if (distance < score) {
+          if (
+            overlap.maximum > maxOverlap ||
+            overlap.total > maxOverlap * 1.5
+          ) {
+            return;
+          }
+
+          const expanded = {
+            x: x - gap / 2,
+            y: y - gap / 2,
+            width: size.width + gap,
+            height: size.height + gap
+          };
+
+          const nearby = getOverlap(
+            expanded,
+            placed
+          ).total;
+
+          const distance = Math.hypot(
+            (x + size.width / 2 - centerX) / width,
+            (y + size.height / 2 - centerY) / height
+          );
+
+          const score =
+            overlap.total * 6 +
+            nearby * 2 +
+            distance +
+            (1 - fraction) * 0.12;
+
+          if (score < bestScore) {
             best = candidate;
-            score = distance;
+            bestScore = score;
           }
         }
 
-        for (let attempt = 0; attempt < 100; attempt++) {
-          const spread = attempt < 40 ? 0.7 : 2;
+        // Try the target area, then the rest of the viewport.
+        for (let attempt = 0; attempt < 240; attempt++) {
+          const local = attempt < 60;
+
+          const x = local
+            ? centerX +
+              randomBetween(-0.5, 0.5) * slot.width * width
+            : randomBetween(0, width);
+
+          const y = local
+            ? centerY +
+              randomBetween(-0.5, 0.5) * slot.height * height
+            : randomBetween(0, height);
 
           consider(
-            targetX +
-              randomBetween(-0.5, 0.5) *
-                slot.width *
-                fieldWidth *
-                spread,
-
-            targetY +
-              randomBetween(-0.5, 0.5) *
-                slot.height *
-                fieldHeight *
-                spread
+            x - size.width / 2,
+            y - size.height / 2
           );
         }
 
-        if (!best) {
-          // Expand outward rather than force an overlapping placement.
-          const localLeft = zone
-            ? zone.left - origin.x - zone.clearance
-            : 0;
-
-          const localRight = zone
-            ? zone.right - origin.x + zone.clearance
-            : width;
-
-          const x = i % 2
-            ? Math.min(
-                offsetX,
-                localLeft,
-                ...placed.map(p => p.x)
-              ) - size.width - gap - 1
-            : Math.max(
-                offsetX + fieldWidth,
-                localRight,
-                ...placed.map(p => p.x + p.width)
-              ) + gap + 1;
-
-          best = {
-            x,
-            y: targetY,
-            ...size
-          };
+        // Check a regular sample for gaps missed by random sampling.
+        for (let row = 0; row <= 12; row++) {
+          for (let column = 0; column <= 12; column++) {
+            consider(
+              (width * column) / 12 - size.width / 2,
+              (height * row) / 12 - size.height / 2
+            );
+          }
         }
 
-        placed.push(best);
-        placementsByItem.set(item, best);
+        if (best) {
+          placed.push(best);
+          visibleItems.push(item);
+          save(item, best);
+        } else {
+          // Try another card size instead of forcing heavy overlap.
+          overflowItems.push(item);
+        }
+      }
 
+      // Remaining cards live outside the viewport.
+      const labelLeft = zone?.label?.width
+        ? zone.label.left - origin.x - 12
+        : 0;
+
+      const labelRight = zone?.label?.width
+        ? zone.label.right - origin.x + 12
+        : width;
+
+      let leftEdge = Math.min(
+        0,
+        labelLeft,
+        zone ? zone.left - origin.x - zone.clearance : 0,
+        ...placed.map(p => p.x)
+      );
+
+      let rightEdge = Math.max(
+        width,
+        labelRight,
+        zone ? zone.right - origin.x + zone.clearance : width,
+        ...placed.map(p => p.x + p.width)
+      );
+
+      overflowItems.forEach((item, i) => {
+        const size = sizeByItem.get(item);
+
+        const x = i % 2
+          ? leftEdge - size.width - gap - 1
+          : rightEdge + gap + 1;
+
+        const candidate = {
+          x,
+          y: randomBetween(
+            0,
+            Math.max(0, height - size.height)
+          ),
+          ...size
+        };
+
+        if (i % 2) {
+          leftEdge = x;
+        } else {
+          rightEdge = x + size.width;
+        }
+
+        save(item, candidate);
+      });
+
+      // Visible cards appear before the off-screen collection.
+      const visibleSet = new Set(visibleItems);
+
+      items.sort(
+        (a, b) =>
+          Number(visibleSet.has(b)) -
+          Number(visibleSet.has(a))
+      );
+
+      items.forEach((item, i) => {
         gsap.set(item, {
-          left: best.x,
-          top: best.y,
           zIndex: i + 1
         });
       });
@@ -1762,8 +1912,15 @@
         height / 4
       );
 
-      const usableWidth = Math.max(1, width - paddingX * 2);
-      const usableHeight = Math.max(1, height - paddingY * 2);
+      const usableWidth = Math.max(
+        1,
+        width - paddingX * 2
+      );
+
+      const usableHeight = Math.max(
+        1,
+        height - paddingY * 2
+      );
 
       const sizes = items.map(item => ({
         width: item.offsetWidth,
@@ -1783,10 +1940,13 @@
         return true;
       }
 
-      // Desktop retains its original balanced placement strategy,
-      // but this calculation runs only once.
+      // Desktop uses the existing balanced layout, calculated once.
       const slots = orderSlots(
-        createSlots(items.length, usableWidth, usableHeight)
+        createSlots(
+          items.length,
+          usableWidth,
+          usableHeight
+        )
       );
 
       const totalArea = sizes.reduce(
@@ -1814,14 +1974,16 @@
           : 0;
 
         const allowedOverlap =
-          0.05 + 0.45 * density * Math.pow(progress, 1.2);
+          0.05 +
+          0.45 * density * Math.pow(progress, 1.2);
 
         let best = null;
         let bestScore = Infinity;
         let acceptable = false;
 
         const availableX = width - size.width;
-        const availableY = height - size.height - entranceMove;
+        const availableY =
+          height - size.height - entranceMove;
 
         if (
           size.width > 0 &&
@@ -1829,17 +1991,30 @@
           availableX >= 0 &&
           availableY >= 0
         ) {
-          const minX = Math.min(paddingX, availableX / 2);
-          const minY = Math.min(paddingY, availableY / 2);
+          const minX = Math.min(
+            paddingX,
+            availableX / 2
+          );
+
+          const minY = Math.min(
+            paddingY,
+            availableY / 2
+          );
 
           const maxX = availableX - minX;
           const maxY = availableY - minY;
 
-          const centerX = paddingX + slot.x * usableWidth;
-          const centerY = paddingY + slot.y * usableHeight;
+          const centerX =
+            paddingX + slot.x * usableWidth;
 
-          const jitterX = slot.width * usableWidth * scatter;
-          const jitterY = slot.height * usableHeight * scatter;
+          const centerY =
+            paddingY + slot.y * usableHeight;
+
+          const jitterX =
+            slot.width * usableWidth * scatter;
+
+          const jitterY =
+            slot.height * usableHeight * scatter;
 
           function consider(x, y) {
             const candidate = {
@@ -1860,17 +2035,24 @@
               return;
             }
 
-            const overlap = getOverlap(candidate, placements);
+            const overlap = getOverlap(
+              candidate,
+              placements
+            );
 
             const slotDistance = Math.hypot(
               (candidate.x + size.width / 2 - centerX) /
                 usableWidth,
+
               (candidate.y + size.height / 2 - centerY) /
                 usableHeight
             );
 
             const score =
-              Math.max(0, overlap.maximum - allowedOverlap) * 20 +
+              Math.max(
+                0,
+                overlap.maximum - allowedOverlap
+              ) * 20 +
               overlap.total +
               slotDistance * 0.35;
 
@@ -1946,6 +2128,7 @@
       });
 
       layoutReady = true;
+
       return true;
     }
 
@@ -1994,7 +2177,8 @@
     }
 
     function nextDelay() {
-      const elapsed = (performance.now() - startedAt) / 1000;
+      const elapsed =
+        (performance.now() - startedAt) / 1000;
 
       const progress = clamp(
         elapsed / Math.max(0.1, options.rampDuration),
@@ -2007,10 +2191,25 @@
         Math.max(0.01, options.acceleration)
       );
 
-      const start = Math.max(0.05, options.startInterval);
-      const end = clamp(options.endInterval, 0.05, start);
-      const base = start * Math.pow(end / start, curve);
-      const variation = clamp(options.timingVariation, 0, 0.5);
+      const start = Math.max(
+        0.05,
+        options.startInterval
+      );
+
+      const end = clamp(
+        options.endInterval,
+        0.05,
+        start
+      );
+
+      const base =
+        start * Math.pow(end / start, curve);
+
+      const variation = clamp(
+        options.timingVariation,
+        0,
+        0.5
+      );
 
       return Math.max(
         reducedMotion ? 0.75 : 0.05,
@@ -2063,7 +2262,7 @@
         animateIn(item);
       }
 
-      // Do not play appearance sounds for entirely clipped cards.
+      // Entirely clipped cards do not trigger appearance sounds.
       if (!blocked.has(item) && isOnScreen(item)) {
         sound.play(item, counters.has(item));
       }
@@ -2112,7 +2311,7 @@
         entrances.get(item)?.kill();
         entrances.delete(item);
 
-        // Preserve left/top. Only visibility changes near the phone.
+        // No left/top changes. Fade only if the phone needs clearance.
         gsap.to(item, {
           autoAlpha: collision ? 0 : 1,
           y: 0,
@@ -2133,7 +2332,7 @@
         return;
       }
 
-      // Scroll and resize never regenerate positions.
+      // Never regenerate positions on scroll or resize.
       layoutFrame = requestAnimationFrame(checkPhoneArea);
     }
 
@@ -2150,6 +2349,7 @@
       observer = new ResizeObserver(scheduleSafetyCheck);
 
       observer.observe(list);
+
       items.forEach(item => observer.observe(item));
 
       const phone = select(".phone-btn");
@@ -2277,6 +2477,7 @@
               0,
               pointer.x - rect.right
             ),
+
             Math.max(
               rect.top - pointer.y,
               0,
@@ -2336,7 +2537,9 @@
         return 2.2;
       }
 
-      return raw.endsWith("ms") ? value / 1000 : value;
+      return raw.endsWith("ms")
+        ? value / 1000
+        : value;
     }
 
     function syncReducedMotionRinging() {
@@ -2446,9 +2649,11 @@
           if (label) {
             gsap.to(label, {
               autoAlpha: 0.5,
+
               duration: motionPreference.matches
                 ? 0
                 : options.revealDuration,
+
               ease: "power2.out",
               overwrite: true
             });
@@ -2456,9 +2661,11 @@
 
           gsap.to(button, {
             autoAlpha: 1,
+
             duration: motionPreference.matches
               ? 0
               : options.revealDuration,
+
             ease: "power2.out",
             overwrite: true,
 
@@ -2482,37 +2689,50 @@
         clearTimeout(fallbackTimer);
         cancelAnimationFrame(frame);
 
-        const phoneGroup = button.closest("[data-phone-button]");
-        const targets = label ? [button, label] : [button];
+        const phoneGroup = button.closest(
+          "[data-phone-button]"
+        );
+
+        const targets = label
+          ? [button, label]
+          : [button];
 
         gsap.killTweensOf(targets);
         button.inert = true;
 
         gsap.to(targets, {
           autoAlpha: 0,
+
           duration: motionPreference.matches
             ? 0
             : SETTINGS.pickup.phoneFade,
+
           ease: "power2.out",
           overwrite: true,
 
           onComplete() {
             button.classList.remove("is-ringing");
-            phoneGroup?.setAttribute("data-phone-picked-up", "");
+
+            phoneGroup?.setAttribute(
+              "data-phone-picked-up",
+              ""
+            );
           }
         });
       }
     };
   }
 
-  // Popup steps:
+  // Popup sequence:
   // 1. Title and form
   // 2. SVG wave after successful submission
   // 3. Final title
 
   function createSteps(popup) {
     const items = Array.from(
-      popup?.querySelectorAll(".genius-ambient-popup__step") || []
+      popup?.querySelectorAll(
+        ".genius-ambient-popup__step"
+      ) || []
     );
 
     const [formStep, waveStep, finalStep] = items;
@@ -2528,7 +2748,10 @@
 
     const formWrap = formStep?.querySelector(".w-form");
     const form = formWrap?.querySelector("form");
-    const success = formWrap?.querySelector(".w-form-done");
+
+    const success = formWrap?.querySelector(
+      ".w-form-done"
+    );
 
     const formTarget =
       formWrap || formStep?.querySelector("form");
@@ -2555,7 +2778,9 @@
       step.removeAttribute("aria-hidden");
       step.classList.add("is-active");
 
-      gsap.set(step, { autoAlpha: opacity });
+      gsap.set(step, {
+        autoAlpha: opacity
+      });
     }
 
     function hide(step) {
@@ -2563,18 +2788,25 @@
       step.setAttribute("aria-hidden", "true");
       step.classList.remove("is-active");
 
-      gsap.set(step, { autoAlpha: 0 });
+      gsap.set(step, {
+        autoAlpha: 0
+      });
     }
 
     items.forEach(hide);
 
     if (formTarget) {
-      gsap.set(formTarget, { autoAlpha: 0 });
+      gsap.set(formTarget, {
+        autoAlpha: 0
+      });
+
       formTarget.inert = true;
     }
 
     function prepare(step) {
-      if (records.has(step)) return records.get(step);
+      if (records.has(step)) {
+        return records.get(step);
+      }
 
       const marked = Array.from(
         step.querySelectorAll("[data-step-title]")
@@ -2600,6 +2832,7 @@
           });
 
           splits.push(split);
+
           return split.chars;
         }
 
@@ -2650,7 +2883,9 @@
 
     function finishStep(record) {
       hide(record.step);
+
       record.splits.forEach(split => split.revert());
+
       records.delete(record.step);
     }
 
@@ -2676,14 +2911,22 @@
           heights[i] / 2
       );
 
-      const maximum = Math.max(wave.height, ...heights);
+      const maximum = Math.max(
+        wave.height,
+        ...heights
+      );
 
       if (svg && bars.length) {
         const box = svg.viewBox.baseVal;
-        const top = Math.min(...centers) - maximum / 2 - 8;
+
+        const top =
+          Math.min(...centers) - maximum / 2 - 8;
 
         const height =
-          Math.max(...centers) + maximum / 2 + 8 - top;
+          Math.max(...centers) +
+          maximum / 2 +
+          8 -
+          top;
 
         svg.setAttribute(
           "viewBox",
@@ -2702,7 +2945,9 @@
         svg.setAttribute("focusable", "false");
       }
 
-      gsap.set(bars, { opacity: 0 });
+      gsap.set(bars, {
+        opacity: 0
+      });
 
       timeline.call(() => show(step));
 
@@ -2710,21 +2955,33 @@
         timeline.to(bars, {
           opacity: 1,
           duration: reduced ? 0.2 : wave.fadeIn,
+
           stagger: {
             each: reduced ? 0 : wave.barStagger,
             from: "start"
           },
+
           ease: "power2.out"
         });
       }
 
-      timeline.to({}, { duration: wave.delay });
+      timeline.to({}, {
+        duration: wave.delay
+      });
 
       if (!reduced && bars.length) {
         const start = timeline.duration();
         const duration = Math.max(0.8, wave.duration);
-        const rise = Math.min(0.28, duration * 0.25);
-        const fall = Math.min(0.42, duration * 0.35);
+
+        const rise = Math.min(
+          0.28,
+          duration * 0.25
+        );
+
+        const fall = Math.min(
+          0.42,
+          duration * 0.35
+        );
 
         const spacing = bars.length > 1
           ? (duration - rise - fall) / (bars.length - 1)
@@ -2736,11 +2993,15 @@
             : 0.5;
 
           const strength =
-            Math.pow(Math.sin(Math.PI * progress), 0.6) *
+            Math.pow(
+              Math.sin(Math.PI * progress),
+              0.6
+            ) *
             (1 - progress * 0.55);
 
           const height =
-            heights[i] + (maximum - heights[i]) * strength;
+            heights[i] +
+            (maximum - heights[i]) * strength;
 
           timeline.to(
             bar,
@@ -2749,6 +3010,7 @@
                 height,
                 y: centers[i] - height / 2
               },
+
               duration: rise,
               ease: "sine.inOut"
             },
@@ -2762,6 +3024,7 @@
                 height: heights[i],
                 y: centers[i] - heights[i] / 2
               },
+
               duration: fall,
               ease: "sine.inOut"
             },
@@ -2769,19 +3032,25 @@
           );
         });
       } else {
-        timeline.to({}, { duration: 0.5 });
+        timeline.to({}, {
+          duration: 0.5
+        });
       }
 
-      timeline.to({}, { duration: wave.hold });
+      timeline.to({}, {
+        duration: wave.hold
+      });
 
       if (bars.length) {
         timeline.to(bars, {
           opacity: 0,
           duration: reduced ? 0.2 : wave.fadeOut,
+
           stagger: {
             each: reduced ? 0 : wave.barStagger,
             from: "start"
           },
+
           ease: "power2.inOut"
         });
       }
@@ -2802,7 +3071,12 @@
       completed = true;
 
       observer.disconnect();
-      form.removeEventListener("submit", onSubmit, true);
+
+      form.removeEventListener(
+        "submit",
+        onSubmit,
+        true
+      );
 
       formWrap.classList.add("is-success-exiting");
 
@@ -2816,7 +3090,9 @@
         popup.setAttribute("tabindex", "-1");
       }
 
-      popup.focus({ preventScroll: true });
+      popup.focus({
+        preventScroll: true
+      });
 
       const record = records.get(formStep);
       const timeline = gsap.timeline();
@@ -2831,20 +3107,30 @@
 
       timeline.call(() => {
         finishStep(record);
-        formWrap.classList.remove("is-success-exiting");
+
+        formWrap.classList.remove(
+          "is-success-exiting"
+        );
       });
 
-      timeline.to({}, { duration: options.gap });
+      timeline.to({}, {
+        duration: options.gap
+      });
 
       addWave(timeline);
 
-      timeline.to({}, { duration: wave.finalDelay });
+      timeline.to({}, {
+        duration: wave.finalDelay
+      });
 
       enter(timeline, prepare(finalStep));
 
       timeline.call(() => {
         finalStep.setAttribute("tabindex", "-1");
-        finalStep.focus({ preventScroll: true });
+
+        finalStep.focus({
+          preventScroll: true
+        });
       });
     }
 
@@ -2861,7 +3147,9 @@
         display === "none" ? "block" : display
       );
 
-      formWrap.classList.add("reception-sequence-form");
+      formWrap.classList.add(
+        "reception-sequence-form"
+      );
 
       const style = document.createElement("style");
 
@@ -2884,10 +3172,18 @@
 
       observer.observe(success, {
         attributes: true,
-        attributeFilter: ["style", "class", "hidden"]
+        attributeFilter: [
+          "style",
+          "class",
+          "hidden"
+        ]
       });
 
-      form.addEventListener("submit", onSubmit, true);
+      form.addEventListener(
+        "submit",
+        onSubmit,
+        true
+      );
     }
 
     return {
@@ -2911,7 +3207,11 @@
             formTarget,
             {
               autoAlpha: 1,
-              duration: reduced ? 0.2 : options.formFade,
+
+              duration: reduced
+                ? 0.2
+                : options.formFade,
+
               ease: "power2.out",
 
               onComplete() {
@@ -2957,9 +3257,15 @@
       ".sound-wrap__btn:not(.sound-wrap__btn--corner)"
     );
 
-    const cornerButton = select(".sound-wrap__btn--corner");
+    const cornerButton = select(
+      ".sound-wrap__btn--corner"
+    );
+
     const phoneButton = select(".phone-btn");
-    const popup = select(".genius-ambient-popup");
+
+    const popup = select(
+      ".genius-ambient-popup"
+    );
 
     const steps = createSteps(popup);
 
@@ -2979,14 +3285,18 @@
       });
     }
 
-    const videoWrap = popup?.querySelector(".video-wrap");
+    const videoWrap = popup?.querySelector(
+      ".video-wrap"
+    );
 
     const video = videoWrap?.matches("video")
       ? videoWrap
       : videoWrap?.querySelector("video");
 
     if (videoWrap) {
-      gsap.set(videoWrap, { autoAlpha: 0 });
+      gsap.set(videoWrap, {
+        autoAlpha: 0
+      });
     }
 
     if (video) {
@@ -3000,8 +3310,13 @@
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    const sound = createSoundManager(SETTINGS.sound);
-    const phoneZone = createPhoneZone(SETTINGS.phone);
+    const sound = createSoundManager(
+      SETTINGS.sound
+    );
+
+    const phoneZone = createPhoneZone(
+      SETTINGS.phone
+    );
 
     const trail = createTrail(
       SETTINGS.trail,
@@ -3055,7 +3370,9 @@
     }
 
     if (popup) {
-      gsap.set(popup, { autoAlpha: 0 });
+      gsap.set(popup, {
+        autoAlpha: 0
+      });
 
       popup.inert = true;
       popup.setAttribute("aria-hidden", "true");
@@ -3072,11 +3389,15 @@
         pointerEvents: "auto"
       });
 
-      if (getComputedStyle(cornerButton).position === "static") {
+      if (
+        getComputedStyle(cornerButton).position === "static"
+      ) {
         cornerButton.style.position = "relative";
       }
 
-      gsap.set(cornerButton, { autoAlpha: 0 });
+      gsap.set(cornerButton, {
+        autoAlpha: 0
+      });
 
       cornerButton.disabled = true;
       cornerButton.setAttribute("aria-hidden", "true");
@@ -3086,9 +3407,13 @@
       if (!cornerButton) return;
 
       const enabled = sound.isEnabled();
-      const action = enabled ? "Mute sound" : "Enable sound";
+
+      const action = enabled
+        ? "Mute sound"
+        : "Enable sound";
 
       cornerButton.disabled = soundPending;
+
       cornerButton.setAttribute("aria-label", action);
       cornerButton.setAttribute("title", action);
 
@@ -3122,7 +3447,11 @@
 
       gsap.to(cornerButton, {
         autoAlpha: 1,
-        duration: reducedMotion ? 0 : SETTINGS.cornerFade,
+
+        duration: reducedMotion
+          ? 0
+          : SETTINGS.cornerFade,
+
         ease: "power2.out",
         overwrite: true
       });
@@ -3167,7 +3496,11 @@
       clearTimeout(timeout);
 
       if (mainButton) {
-        mainButton.removeEventListener("click", onMainClick);
+        mainButton.removeEventListener(
+          "click",
+          onMainClick
+        );
+
         mainButton.disabled = true;
       }
 
@@ -3190,7 +3523,11 @@
 
       gsap.to(overlay, {
         autoAlpha: 0,
-        duration: reducedMotion ? 0 : SETTINGS.overlayFade,
+
+        duration: reducedMotion
+          ? 0
+          : SETTINGS.overlayFade,
+
         ease: "power2.out",
         overwrite: true,
 
@@ -3231,13 +3568,19 @@
 
       pickedUp = true;
 
-      phoneButton.removeEventListener("click", onPickup);
+      phoneButton.removeEventListener(
+        "click",
+        onPickup
+      );
 
       trail.stop?.();
       random.stop?.();
       phone.stop?.();
 
-      sound.fadeOutAll(SETTINGS.pickup.soundFade);
+      sound.fadeOutAll(
+        SETTINGS.pickup.soundFade
+      );
+
       updateCornerButton();
 
       popup.inert = false;
@@ -3252,7 +3595,9 @@
         backdrop,
         {
           autoAlpha: 1,
-          "--ambient-blur": `${SETTINGS.backdrop.blur}px`,
+
+          "--ambient-blur":
+            `${SETTINGS.backdrop.blur}px`,
 
           duration: reducedMotion
             ? 0
@@ -3281,7 +3626,9 @@
               popup.setAttribute("tabindex", "-1");
             }
 
-            popup.focus({ preventScroll: true });
+            popup.focus({
+              preventScroll: true
+            });
           }
         },
         0
@@ -3303,7 +3650,9 @@
             });
           }
 
-          sound.startAmbient(SETTINGS.ambient);
+          sound.startAmbient(
+            SETTINGS.ambient
+          );
         },
         [],
         videoDelay
@@ -3333,20 +3682,32 @@
       );
     }
 
-    phoneButton?.addEventListener("click", onPickup);
-    cornerButton?.addEventListener("click", onCornerClick);
+    phoneButton?.addEventListener(
+      "click",
+      onPickup
+    );
+
+    cornerButton?.addEventListener(
+      "click",
+      onCornerClick
+    );
 
     if (!overlay) {
       begin(false);
       return;
     }
 
-    gsap.set(overlay, { autoAlpha: 1 });
+    gsap.set(overlay, {
+      autoAlpha: 1
+    });
 
     overlay.inert = false;
     overlay.removeAttribute("aria-hidden");
 
-    mainButton?.addEventListener("click", onMainClick);
+    mainButton?.addEventListener(
+      "click",
+      onMainClick
+    );
 
     const waitSeconds = readNumber(
       overlay,
