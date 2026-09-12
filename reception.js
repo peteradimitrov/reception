@@ -69,26 +69,22 @@
       pingUrl:
         AUDIO_PATH +
         "6a9bc5637521c66b5c85d17d_Reception-Ping.mp3",
-
       pingVolume: 0.5,
 
       typingUrl:
         AUDIO_PATH +
         "6a9d71768425ed54cd3b20cb_Reception-Typing.mp3",
-
       typingVolume: 0.35,
 
       streetUrl:
         AUDIO_PATH +
         "6a9d7944f79d96f6c8c13b37_Reception-StreetNoise.mp3",
-
       streetVolume: 0.4,
       streetFadeDuration: 4,
 
       ringUrl:
         AUDIO_PATH +
         "6a9e6cc17058d12cadbd78fb_Reception-Ring.mp3",
-
       ringVolume: 0.6,
 
       ambientUrl:
@@ -99,13 +95,8 @@
     trail: {
       minWidth: 992,
       moveDistance: 15,
-
-      // Milliseconds from appearance until automatic exit.
       stopDuration: 800,
-
       trailLength: 8,
-
-      // Entrance duration is in seconds.
       enterDuration: 0.45,
       enterEase: "sine.out"
     },
@@ -117,11 +108,25 @@
       rampDuration: 5,
       acceleration: 1.5,
       timingVariation: 0.15,
+
       fadeDuration: 0.22,
       moveDuration: 0.45,
       moveUp: 16,
+
       edgePadding: 24,
-      scatter: 0.7
+      scatter: 0.7,
+
+      // Mobile layout is selected when positions are first assigned.
+      mobileBreakpoint: 768,
+
+      // Minimum gap between measured mobile card rectangles.
+      mobileGap: 24,
+
+      // Lower values spread the collection across a larger field.
+      mobileCoverage: 0.32,
+
+      // Minimum mobile field width relative to its container.
+      mobileFieldWidth: 1.4
     }
   };
 
@@ -138,24 +143,16 @@
   function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-
       [array[i], array[j]] = [array[j], array[i]];
     }
 
     return array;
   }
 
-  function readNumber(
-    element,
-    attribute,
-    fallback,
-    minimum = 0
-  ) {
+  function readNumber(element, attribute, fallback, minimum = 0) {
     const raw = element?.getAttribute(attribute);
 
-    if (raw == null || raw.trim() === "") {
-      return fallback;
-    }
+    if (raw == null || raw.trim() === "") return fallback;
 
     const value = Number(raw);
 
@@ -164,10 +161,14 @@
       : fallback;
   }
 
-  // Keep notifications outside the phone's protected area.
+  // Protected phone area
 
   function createPhoneZone(options) {
     const button = select(".phone-btn");
+
+    const label =
+      button?.parentElement?.querySelector(".phone-btn__label") ||
+      select(".phone-btn__label");
 
     let cachedFrame = -1;
     let cachedRect = null;
@@ -190,18 +191,14 @@
 
       const frame = gsap.ticker.frame;
 
-      if (cachedFrame === frame) {
-        return cachedRect;
-      }
+      if (cachedFrame === frame) return cachedRect;
 
       cachedFrame = frame;
       cachedRect = null;
 
       const rect = button.getBoundingClientRect();
 
-      if (!rect.width || !rect.height) {
-        return null;
-      }
+      if (!rect.width || !rect.height) return null;
 
       const radius = readNumber(
         button,
@@ -215,6 +212,7 @@
         top: rect.top,
         right: rect.right,
         bottom: rect.bottom,
+        label: label?.getBoundingClientRect(),
 
         clearance: readNumber(
           button,
@@ -241,7 +239,20 @@
         0
       );
 
-      return Math.hypot(dx, dy) <= zone.clearance;
+      const text = zone.label;
+
+      const touchesLabel =
+        text?.width > 0 &&
+        text?.height > 0 &&
+        rect.right > text.left - 12 &&
+        rect.left < text.right + 12 &&
+        rect.bottom > text.top - 12 &&
+        rect.top < text.bottom + 12;
+
+      return (
+        Math.hypot(dx, dy) <= zone.clearance ||
+        !!touchesLabel
+      );
     }
 
     function getOrigin(list) {
@@ -253,22 +264,12 @@
       };
     }
 
-    function blocksPlacement(
-      candidate,
-      origin,
-      zone,
-      moveDown = 0
-    ) {
+    function blocksPlacement(candidate, origin, zone, moveDown = 0) {
       return overlaps(
         {
           left: origin.x + candidate.x,
           top: origin.y + candidate.y,
-
-          right:
-            origin.x +
-            candidate.x +
-            candidate.width,
-
+          right: origin.x + candidate.x + candidate.width,
           bottom:
             origin.y +
             candidate.y +
@@ -310,22 +311,18 @@
         url: options.pingUrl,
         volume: options.pingVolume
       },
-
       typing: {
         url: options.typingUrl,
         volume: options.typingVolume
       },
-
       street: {
         url: options.streetUrl,
         volume: options.streetVolume
       },
-
       ring: {
         url: options.ringUrl,
         volume: options.ringVolume
       },
-
       ambient: {
         url: options.ambientUrl,
         volume: 0
@@ -346,9 +343,7 @@
           })
           .catch(error => {
             asset.bytesPromise = null;
-
             console.warn("Could not load audio:", error);
-
             return null;
           });
       }
@@ -365,17 +360,14 @@
         asset.decodePromise = preload(asset)
           .then(bytes => {
             if (!bytes) return null;
-
             return context.decodeAudioData(bytes.slice(0));
           })
           .then(buffer => {
             asset.buffer = buffer;
-
             return buffer;
           })
           .catch(error => {
             console.warn("Could not decode audio:", error);
-
             return null;
           })
           .finally(() => {
@@ -401,11 +393,8 @@
       const source = context.createBufferSource();
 
       source.buffer = asset.buffer;
-
       source.loop =
-        asset === assets.ambient
-          ? ambientSettings.loop
-          : true;
+        asset === assets.ambient ? ambientSettings.loop : true;
 
       source.connect(asset.output);
 
@@ -417,7 +406,6 @@
 
       if (fade > 0) {
         asset.output.gain.setValueAtTime(0, now);
-
         asset.output.gain.linearRampToValueAtTime(
           volume,
           now + fade
@@ -440,9 +428,7 @@
     }
 
     function startRequestedLoops() {
-      if (!enabled || context?.state !== "running") {
-        return;
-      }
+      if (!enabled || context?.state !== "running") return;
 
       if (finished) {
         if (ambientSettings) {
@@ -455,10 +441,7 @@
         return;
       }
 
-      startLoop(
-        assets.street,
-        options.streetFadeDuration
-      );
+      startLoop(assets.street, options.streetFadeDuration);
 
       if (typingRequested) {
         startLoop(assets.typing);
@@ -575,8 +558,7 @@
       if (context) return true;
 
       const AudioContextClass =
-        window.AudioContext ||
-        window.webkitAudioContext;
+        window.AudioContext || window.webkitAudioContext;
 
       if (!AudioContextClass) return false;
 
@@ -669,9 +651,7 @@
         });
       } catch (error) {
         enabled = false;
-
         console.warn("Could not enable audio:", error);
-
         return Promise.resolve(false);
       }
     }
@@ -679,7 +659,6 @@
     function stopAsset(asset) {
       if (asset.source) {
         const source = asset.source;
-
         asset.source = null;
         source.stop();
       }
@@ -731,19 +710,14 @@
       const now = context.currentTime;
 
       masterOutput.gain.cancelScheduledValues(now);
-
       masterOutput.gain.setValueAtTime(
         masterOutput.gain.value,
         now
       );
 
-      if (
-        context.state !== "running" ||
-        duration <= 0
-      ) {
+      if (context.state !== "running" || duration <= 0) {
         masterOutput.gain.setValueAtTime(0, now);
         stopOldAudio();
-
         return;
       }
 
@@ -762,9 +736,7 @@
       ambientSettings = settings;
       assets.ambient.volume = settings.volume;
 
-      if (!finished || !enabled || !context) {
-        return;
-      }
+      if (!finished || !enabled || !context) return;
 
       if (assets.ambient.buffer) {
         startRequestedLoops();
@@ -782,13 +754,12 @@
       ping,
       playRing,
       setBackgroundLevel,
-
       isEnabled: () =>
         enabled && context?.state === "running"
     };
   }
 
-  // Optional notification badge counting.
+  // Optional badge counting
 
   function createBadgeCounters(
     items,
@@ -806,11 +777,7 @@
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    const minInterval = Math.max(
-      0.05,
-      options.minInterval
-    );
-
+    const minInterval = Math.max(0.05, options.minInterval);
     const maxInterval = Math.max(
       minInterval,
       options.maxInterval
@@ -819,8 +786,7 @@
     for (const item of items) {
       if (
         !item.classList.contains("notification-type") ||
-        item.getAttribute("data-notification-count") !==
-          "true"
+        item.getAttribute("data-notification-count") !== "true"
       ) {
         continue;
       }
@@ -837,10 +803,7 @@
 
       const target = Number(raw);
 
-      if (
-        !Number.isSafeInteger(target) ||
-        target < 0
-      ) {
+      if (!Number.isSafeInteger(target) || target < 0) {
         continue;
       }
 
@@ -868,10 +831,10 @@
         item,
         badge,
         originalY,
+        revealed: false,
         target,
         current: 0,
         started: false,
-        revealed: false,
 
         write(value) {
           textNode.nodeValue = String(value);
@@ -889,7 +852,6 @@
 
       gsap.set(badge, {
         autoAlpha: 0,
-
         y:
           originalY +
           (reducedMotion ? 0 : options.badgeMoveDown)
@@ -904,11 +866,7 @@
       gsap.to(record.badge, {
         autoAlpha: 1,
         y: record.originalY,
-
-        duration: reducedMotion
-          ? 0
-          : options.badgeDuration,
-
+        duration: reducedMotion ? 0 : options.badgeDuration,
         ease: "power2.out",
         overwrite: "auto"
       });
@@ -969,10 +927,7 @@
         return;
       }
 
-      const eligible = [...records.values()].filter(
-        isVisible
-      );
-
+      const eligible = [...records.values()].filter(isVisible);
       const eligibleSet = new Set(eligible);
 
       bag = bag.filter(record => eligibleSet.has(record));
@@ -1011,9 +966,7 @@
       start(item) {
         const record = records.get(item);
 
-        if (stopped || !record || record.started) {
-          return;
-        }
+        if (stopped || !record || record.started) return;
 
         record.started = true;
         schedule();
@@ -1021,9 +974,7 @@
 
       stop() {
         stopped = true;
-
         clearTimeout(timer);
-
         timer = null;
         bag = [];
       }
@@ -1034,19 +985,14 @@
 
   function createTrail(options, phoneZone) {
     const wrapper = select("[data-trail-wrapper]");
-
-    const list = wrapper?.querySelector(
-      "[data-trail-list]"
-    );
+    const list = wrapper?.querySelector("[data-trail-list]");
 
     if (!wrapper || !list) {
       return { start() {} };
     }
 
     const items = shuffle(
-      Array.from(
-        list.querySelectorAll("[data-trail-item]")
-      )
+      Array.from(list.querySelectorAll("[data-trail-item]"))
     );
 
     if (!items.length) {
@@ -1105,9 +1051,7 @@
 
         nextIndex = (nextIndex + 1) % items.length;
 
-        if (!retained.has(item)) {
-          return item;
-        }
+        if (!retained.has(item)) return item;
       }
 
       return null;
@@ -1120,9 +1064,7 @@
       retained.delete(item);
       visibleItems.delete(item);
 
-      activeItems = activeItems.filter(
-        value => value !== item
-      );
+      activeItems = activeItems.filter(value => value !== item);
 
       gsap.set(item, {
         autoAlpha: 0,
@@ -1149,15 +1091,10 @@
     }
 
     function exitItem(item) {
-      if (!item || retained.has(item)) {
-        return;
-      }
+      if (!item || retained.has(item)) return;
 
       timestamps.delete(item);
-
-      activeItems = activeItems.filter(
-        value => value !== item
-      );
+      activeItems = activeItems.filter(value => value !== item);
 
       if (!useFall) {
         gsap.to(item, {
@@ -1183,21 +1120,14 @@
       });
 
       const clearance =
-        Math.hypot(
-          item.offsetWidth,
-          item.offsetHeight
-        ) /
-          2 +
-        24;
+        Math.hypot(item.offsetWidth, item.offsetHeight) / 2 + 24;
 
       const distance = Math.max(
         40,
         list.clientHeight - item.offsetTop + clearance
       );
 
-      const duration = Math.sqrt(
-        (2 * distance) / 1800
-      );
+      const duration = Math.sqrt((2 * distance) / 1800);
 
       gsap.to(item, {
         x: randomBetween(-45, 45) * duration,
@@ -1214,11 +1144,7 @@
         overwrite: "auto",
 
         onUpdate() {
-          if (
-            phoneZone.overlaps(
-              item.getBoundingClientRect()
-            )
-          ) {
+          if (phoneZone.overlaps(item.getBoundingClientRect())) {
             hideImmediately(item);
           }
         },
@@ -1257,11 +1183,7 @@
       gsap.killTweensOf(item);
 
       if (useFall) {
-        gsap.set(item, {
-          x: 0,
-          y: 0,
-          rotation: 0
-        });
+        gsap.set(item, { x: 0, y: 0, rotation: 0 });
       }
 
       gsap.set(item, {
@@ -1271,11 +1193,7 @@
       });
 
       timestamps.delete(item);
-
-      activeItems = activeItems.filter(
-        value => value !== item
-      );
-
+      activeItems = activeItems.filter(value => value !== item);
       visibleItems.add(item);
 
       const shouldStay =
@@ -1302,10 +1220,8 @@
         {
           autoAlpha: 1,
           ...(useScale ? { scale: 1 } : {}),
-
           duration: options.enterDuration,
           ease: options.enterEase,
-
           overwrite: true
         }
       );
@@ -1326,13 +1242,9 @@
         : Infinity;
 
       const threshold =
-        window.innerWidth /
-        options.moveDistance /
-        density;
+        window.innerWidth / options.moveDistance / density;
 
-      if (distance <= threshold) {
-        return;
-      }
+      if (distance <= threshold) return;
 
       last = { x, y };
 
@@ -1437,18 +1349,9 @@
 
         trigger.kill();
 
-        document.removeEventListener(
-          "visibilitychange",
-          sync
-        );
-
+        document.removeEventListener("visibilitychange", sync);
         window.removeEventListener("resize", sync);
-
-        window.removeEventListener(
-          "scroll",
-          clearPhoneArea,
-          true
-        );
+        window.removeEventListener("scroll", clearPhoneArea, true);
 
         gsap.killTweensOf(items);
 
@@ -1459,7 +1362,6 @@
         });
 
         activeItems = [];
-
         timestamps.clear();
         retained.clear();
         visibleItems.clear();
@@ -1467,27 +1369,19 @@
     };
   }
 
-  // Random notifications
+  // Random notifications:
+  // positions are generated once and never shuffled on resize.
 
-  function createRandomNotifications(
-    options,
-    sound,
-    phoneZone
-  ) {
+  function createRandomNotifications(options, sound, phoneZone) {
     const wrapper = select("[data-random-wrapper]");
-
-    const list = wrapper?.querySelector(
-      "[data-random-list]"
-    );
+    const list = wrapper?.querySelector("[data-random-list]");
 
     if (!list) {
       return { start() {} };
     }
 
     const items = shuffle(
-      Array.from(
-        list.querySelectorAll("[data-random-item]")
-      )
+      Array.from(list.querySelectorAll("[data-random-item]"))
     );
 
     if (!items.length) {
@@ -1498,26 +1392,26 @@
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    const entranceMove = reducedMotion
-      ? 0
-      : options.moveUp;
+    const entranceMove = reducedMotion ? 0 : options.moveUp;
 
     let started = false;
+    let stopped = false;
     let index = 0;
     let startedAt = null;
     let layoutFrame = null;
     let layoutReady = false;
-    let previousGeometry = "";
     let popupTimer = null;
     let observer = null;
 
-    let hiddenAt = document.hidden
-      ? performance.now()
-      : null;
+    let hiddenAt = document.hidden ? performance.now() : null;
 
     const placementsByItem = new Map();
     const shown = new Set();
     const entrances = new Map();
+    const blocked = new Set();
+
+    // Off-screen cards must not create a scrollable overflow area.
+    wrapper.style.overflow = "clip";
 
     gsap.set(items, {
       autoAlpha: 0,
@@ -1531,37 +1425,35 @@
 
       item =>
         shown.has(item) &&
-        !!placementsByItem.get(item) &&
-        !entrances.has(item)
+        !blocked.has(item) &&
+        !entrances.has(item) &&
+        isOnScreen(item)
     );
 
     function schedulePopup(seconds) {
-      popupTimer = gsap.delayedCall(
-        seconds,
-        showNext
-      );
+      popupTimer = gsap.delayedCall(seconds, showNext);
 
       if (document.hidden) {
         popupTimer.pause();
       }
     }
 
-    document.addEventListener("visibilitychange", () => {
+    function onVisibility() {
       if (document.hidden) {
         hiddenAt = performance.now();
         popupTimer?.pause();
       } else {
-        if (
-          hiddenAt !== null &&
-          startedAt !== null
-        ) {
+        if (hiddenAt !== null && startedAt !== null) {
           startedAt += performance.now() - hiddenAt;
         }
 
         hiddenAt = null;
         popupTimer?.resume();
+        scheduleSafetyCheck();
       }
-    });
+    }
+
+    document.addEventListener("visibilitychange", onVisibility);
 
     function createSlots(count, width, height) {
       const columns = Math.max(
@@ -1569,11 +1461,7 @@
         Math.round(Math.sqrt((count * width) / height))
       );
 
-      const rows = Math.max(
-        1,
-        Math.ceil(count / columns)
-      );
-
+      const rows = Math.max(1, Math.ceil(count / columns));
       const slots = [];
 
       for (let row = 0; row < rows; row++) {
@@ -1622,9 +1510,7 @@
           }
         });
 
-        result.push(
-          remaining.splice(bestIndex, 1)[0]
-        );
+        result.push(remaining.splice(bestIndex, 1)[0]);
       }
 
       return result;
@@ -1637,7 +1523,6 @@
       for (const other of placements) {
         const width = Math.max(
           0,
-
           Math.min(
             candidate.x + candidate.width,
             other.x + other.width
@@ -1646,7 +1531,6 @@
 
         const height = Math.max(
           0,
-
           Math.min(
             candidate.y + candidate.height,
             other.y + other.height
@@ -1655,7 +1539,6 @@
 
         const smallerArea = Math.max(
           1,
-
           Math.min(
             candidate.width * candidate.height,
             other.width * other.height
@@ -1671,28 +1554,200 @@
       return { maximum, total };
     }
 
-    function geometryKey() {
-      const origin = phoneZone.getOrigin(list);
-      const zone = phoneZone.getRect();
+    function isOnScreen(item) {
+      const rect = item.getBoundingClientRect();
+      const clip = wrapper.getBoundingClientRect();
 
-      return [
-        list.clientWidth,
-        list.clientHeight,
-        zone ? zone.left - origin.x : "",
-        zone ? zone.top - origin.y : "",
-        zone ? zone.right - origin.x : "",
-        zone ? zone.bottom - origin.y : "",
-        zone ? zone.clearance : ""
-      ].join("|");
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.right > Math.max(0, clip.left) &&
+        rect.left < Math.min(window.innerWidth, clip.right) &&
+        rect.bottom > Math.max(0, clip.top) &&
+        rect.top < Math.min(window.innerHeight, clip.bottom)
+      );
+    }
+
+    function buildMobileLayout(width, height, origin, zone, sizes) {
+      const gap = Math.max(0, options.mobileGap);
+      const coverage = clamp(options.mobileCoverage, 0.1, 0.8);
+
+      const area = sizes.reduce(
+        (sum, size) =>
+          sum +
+          (size.width + gap) *
+            (size.height + entranceMove + gap),
+        0
+      );
+
+      const expansion = Math.max(
+        1,
+        Math.sqrt(area / (width * height * coverage))
+      );
+
+      const fieldWidth =
+        width * Math.max(options.mobileFieldWidth, expansion);
+
+      const fieldHeight = height * expansion;
+
+      const offsetX = (width - fieldWidth) / 2;
+      const offsetY = (height - fieldHeight) / 2;
+
+      const slots = createSlots(
+        items.length,
+        fieldWidth,
+        fieldHeight
+      );
+
+      // Start near the viewport, then work outward.
+      slots.sort(
+        (a, b) =>
+          Math.hypot(a.x - 0.5, a.y - 0.5) -
+          Math.hypot(b.x - 0.5, b.y - 0.5)
+      );
+
+      // Pair each area with the opposite side for balance.
+      const ordered = [];
+
+      while (slots.length) {
+        const first = slots.shift();
+        ordered.push(first);
+
+        if (!slots.length) break;
+
+        let nearest = 0;
+
+        slots.forEach((slot, i) => {
+          const distance = value =>
+            (value.x + first.x - 1) ** 2 +
+            (value.y + first.y - 1) ** 2;
+
+          if (distance(slot) < distance(slots[nearest])) {
+            nearest = i;
+          }
+        });
+
+        ordered.push(slots.splice(nearest, 1)[0]);
+      }
+
+      const placed = [];
+
+      items.forEach((item, i) => {
+        const size = sizes[i];
+
+        if (!size.width || !size.height) {
+          placementsByItem.set(item, null);
+          return;
+        }
+
+        const slot = ordered[i];
+
+        const targetX =
+          offsetX + slot.x * fieldWidth - size.width / 2;
+
+        const targetY =
+          offsetY + slot.y * fieldHeight - size.height / 2;
+
+        let best = null;
+        let score = Infinity;
+
+        function consider(x, y) {
+          const candidate = { x, y, ...size };
+
+          if (
+            phoneZone.blocksPlacement(
+              candidate,
+              origin,
+              zone,
+              entranceMove
+            )
+          ) {
+            return;
+          }
+
+          const collides = placed.some(other => !(
+            x + size.width + gap <= other.x ||
+            other.x + other.width + gap <= x ||
+            y + size.height + entranceMove + gap <= other.y ||
+            other.y + other.height + entranceMove + gap <= y
+          ));
+
+          if (collides) return;
+
+          const distance = Math.hypot(
+            x - targetX,
+            y - targetY
+          );
+
+          if (distance < score) {
+            best = candidate;
+            score = distance;
+          }
+        }
+
+        for (let attempt = 0; attempt < 100; attempt++) {
+          const spread = attempt < 40 ? 0.7 : 2;
+
+          consider(
+            targetX +
+              randomBetween(-0.5, 0.5) *
+                slot.width *
+                fieldWidth *
+                spread,
+
+            targetY +
+              randomBetween(-0.5, 0.5) *
+                slot.height *
+                fieldHeight *
+                spread
+          );
+        }
+
+        if (!best) {
+          // Expand outward rather than force an overlapping placement.
+          const localLeft = zone
+            ? zone.left - origin.x - zone.clearance
+            : 0;
+
+          const localRight = zone
+            ? zone.right - origin.x + zone.clearance
+            : width;
+
+          const x = i % 2
+            ? Math.min(
+                offsetX,
+                localLeft,
+                ...placed.map(p => p.x)
+              ) - size.width - gap - 1
+            : Math.max(
+                offsetX + fieldWidth,
+                localRight,
+                ...placed.map(p => p.x + p.width)
+              ) + gap + 1;
+
+          best = {
+            x,
+            y: targetY,
+            ...size
+          };
+        }
+
+        placed.push(best);
+        placementsByItem.set(item, best);
+
+        gsap.set(item, {
+          left: best.x,
+          top: best.y,
+          zIndex: i + 1
+        });
+      });
     }
 
     function buildLayout() {
       const width = list.clientWidth;
       const height = list.clientHeight;
 
-      if (!width || !height) {
-        return false;
-      }
+      if (!width || !height) return false;
 
       const origin = phoneZone.getOrigin(list);
       const zone = phoneZone.getRect();
@@ -1707,28 +1762,32 @@
         height / 4
       );
 
-      const usableWidth = Math.max(
-        1,
-        width - paddingX * 2
-      );
-
-      const usableHeight = Math.max(
-        1,
-        height - paddingY * 2
-      );
-
-      const slots = orderSlots(
-        createSlots(
-          items.length,
-          usableWidth,
-          usableHeight
-        )
-      );
+      const usableWidth = Math.max(1, width - paddingX * 2);
+      const usableHeight = Math.max(1, height - paddingY * 2);
 
       const sizes = items.map(item => ({
         width: item.offsetWidth,
         height: item.offsetHeight
       }));
+
+      if (window.innerWidth < options.mobileBreakpoint) {
+        buildMobileLayout(
+          width,
+          height,
+          origin,
+          zone,
+          sizes
+        );
+
+        layoutReady = true;
+        return true;
+      }
+
+      // Desktop retains its original balanced placement strategy,
+      // but this calculation runs only once.
+      const slots = orderSlots(
+        createSlots(items.length, usableWidth, usableHeight)
+      );
 
       const totalArea = sizes.reduce(
         (sum, size) => sum + size.width * size.height,
@@ -1750,23 +1809,19 @@
         const slot = slots[i];
         const size = sizes[i];
 
-        const progress =
-          items.length > 1
-            ? i / (items.length - 1)
-            : 0;
+        const progress = items.length > 1
+          ? i / (items.length - 1)
+          : 0;
 
         const allowedOverlap =
-          0.05 +
-          0.45 * density * Math.pow(progress, 1.2);
+          0.05 + 0.45 * density * Math.pow(progress, 1.2);
 
         let best = null;
         let bestScore = Infinity;
         let acceptable = false;
 
         const availableX = width - size.width;
-
-        const availableY =
-          height - size.height - entranceMove;
+        const availableY = height - size.height - entranceMove;
 
         if (
           size.width > 0 &&
@@ -1774,30 +1829,17 @@
           availableX >= 0 &&
           availableY >= 0
         ) {
-          const minX = Math.min(
-            paddingX,
-            availableX / 2
-          );
-
-          const minY = Math.min(
-            paddingY,
-            availableY / 2
-          );
+          const minX = Math.min(paddingX, availableX / 2);
+          const minY = Math.min(paddingY, availableY / 2);
 
           const maxX = availableX - minX;
           const maxY = availableY - minY;
 
-          const centerX =
-            paddingX + slot.x * usableWidth;
+          const centerX = paddingX + slot.x * usableWidth;
+          const centerY = paddingY + slot.y * usableHeight;
 
-          const centerY =
-            paddingY + slot.y * usableHeight;
-
-          const jitterX =
-            slot.width * usableWidth * scatter;
-
-          const jitterY =
-            slot.height * usableHeight * scatter;
+          const jitterX = slot.width * usableWidth * scatter;
+          const jitterY = slot.height * usableHeight * scatter;
 
           function consider(x, y) {
             const candidate = {
@@ -1818,31 +1860,17 @@
               return;
             }
 
-            const overlap = getOverlap(
-              candidate,
-              placements
-            );
+            const overlap = getOverlap(candidate, placements);
 
             const slotDistance = Math.hypot(
-              (
-                candidate.x +
-                size.width / 2 -
-                centerX
-              ) / usableWidth,
-
-              (
-                candidate.y +
-                size.height / 2 -
-                centerY
-              ) / usableHeight
+              (candidate.x + size.width / 2 - centerX) /
+                usableWidth,
+              (candidate.y + size.height / 2 - centerY) /
+                usableHeight
             );
 
             const score =
-              Math.max(
-                0,
-                overlap.maximum - allowedOverlap
-              ) *
-                20 +
+              Math.max(0, overlap.maximum - allowedOverlap) * 20 +
               overlap.total +
               slotDistance * 0.35;
 
@@ -1863,17 +1891,11 @@
           ) {
             consider(
               centerX +
-                randomBetween(
-                  -jitterX / 2,
-                  jitterX / 2
-                ) -
+                randomBetween(-jitterX / 2, jitterX / 2) -
                 size.width / 2,
 
               centerY +
-                randomBetween(
-                  -jitterY / 2,
-                  jitterY / 2
-                ) -
+                randomBetween(-jitterY / 2, jitterY / 2) -
                 size.height / 2
             );
           }
@@ -1889,11 +1911,7 @@
             );
           }
 
-          for (
-            let row = 0;
-            row <= 8 && !acceptable;
-            row++
-          ) {
+          for (let row = 0; row <= 8 && !acceptable; row++) {
             for (
               let column = 0;
               column <= 8 && !acceptable;
@@ -1910,11 +1928,6 @@
         placementsByItem.set(item, best);
 
         if (!best) {
-          entrances.get(item)?.kill();
-          entrances.delete(item);
-
-          gsap.killTweensOf(item);
-
           gsap.set(item, {
             autoAlpha: 0,
             y: 0
@@ -1930,23 +1943,9 @@
           top: best.y,
           zIndex: i + 1
         });
-
-        if (shown.has(item)) {
-          entrances.get(item)?.kill();
-          entrances.delete(item);
-
-          gsap.killTweensOf(item);
-
-          gsap.set(item, {
-            autoAlpha: 1,
-            y: 0
-          });
-        }
       });
 
-      previousGeometry = geometryKey();
       layoutReady = true;
-
       return true;
     }
 
@@ -1995,8 +1994,7 @@
     }
 
     function nextDelay() {
-      const elapsed =
-        (performance.now() - startedAt) / 1000;
+      const elapsed = (performance.now() - startedAt) / 1000;
 
       const progress = clamp(
         elapsed / Math.max(0.1, options.rampDuration),
@@ -2009,46 +2007,21 @@
         Math.max(0.01, options.acceleration)
       );
 
-      const start = Math.max(
-        0.05,
-        options.startInterval
-      );
-
-      const end = clamp(
-        options.endInterval,
-        0.05,
-        start
-      );
-
-      const base =
-        start * Math.pow(end / start, curve);
-
-      const variation = clamp(
-        options.timingVariation,
-        0,
-        0.5
-      );
+      const start = Math.max(0.05, options.startInterval);
+      const end = clamp(options.endInterval, 0.05, start);
+      const base = start * Math.pow(end / start, curve);
+      const variation = clamp(options.timingVariation, 0, 0.5);
 
       return Math.max(
         reducedMotion ? 0.75 : 0.05,
-
-        base *
-          randomBetween(
-            1 - variation,
-            1 + variation
-          )
+        base * randomBetween(1 - variation, 1 + variation)
       );
     }
 
     function showNext() {
-      if (!started || index >= items.length) {
-        return;
-      }
+      if (!started || index >= items.length) return;
 
-      if (
-        !layoutReady ||
-        previousGeometry !== geometryKey()
-      ) {
+      if (!layoutReady) {
         if (!buildLayout()) {
           schedulePopup(0.25);
           return;
@@ -2062,20 +2035,39 @@
         index++;
       }
 
-      if (index >= items.length) {
-        return;
-      }
+      if (index >= items.length) return;
 
       if (startedAt === null) {
         startedAt = performance.now();
       }
 
       const item = items[index];
+      const candidate = placementsByItem.get(item);
 
       shown.add(item);
 
-      animateIn(item);
-      sound.play(item, counters.has(item));
+      if (
+        phoneZone.blocksPlacement(
+          {
+            ...candidate,
+            width: item.offsetWidth,
+            height: item.offsetHeight
+          },
+          phoneZone.getOrigin(list),
+          phoneZone.getRect(),
+          entranceMove
+        )
+      ) {
+        blocked.add(item);
+      } else {
+        animateIn(item);
+      }
+
+      // Do not play appearance sounds for entirely clipped cards.
+      if (!blocked.has(item) && isOnScreen(item)) {
+        sound.play(item, counters.has(item));
+      }
+
       counters.start(item);
 
       index++;
@@ -2085,52 +2077,79 @@
       }
     }
 
-    function scheduleLayout(force = false) {
-      if (!started) return;
+    function checkPhoneArea() {
+      layoutFrame = null;
 
-      if (force) {
-        layoutReady = false;
+      if (!started || stopped) return;
+
+      const zone = phoneZone.getRect();
+      const origin = phoneZone.getOrigin(list);
+
+      for (const item of shown) {
+        const saved = placementsByItem.get(item);
+
+        if (!saved) continue;
+
+        const collision = phoneZone.blocksPlacement(
+          {
+            ...saved,
+            width: item.offsetWidth,
+            height: item.offsetHeight
+          },
+          origin,
+          zone,
+          entranceMove
+        );
+
+        if (collision === blocked.has(item)) continue;
+
+        if (collision) {
+          blocked.add(item);
+        } else {
+          blocked.delete(item);
+        }
+
+        entrances.get(item)?.kill();
+        entrances.delete(item);
+
+        // Preserve left/top. Only visibility changes near the phone.
+        gsap.to(item, {
+          autoAlpha: collision ? 0 : 1,
+          y: 0,
+          duration: reducedMotion ? 0 : 0.2,
+          overwrite: true,
+          ease: "sine.out"
+        });
       }
+    }
 
+    function scheduleSafetyCheck() {
       if (
+        !started ||
+        stopped ||
         document.hidden ||
         layoutFrame !== null
       ) {
         return;
       }
 
-      layoutFrame = requestAnimationFrame(() => {
-        layoutFrame = null;
-
-        if (
-          !layoutReady ||
-          previousGeometry !== geometryKey()
-        ) {
-          buildLayout();
-        }
-      });
+      // Scroll and resize never regenerate positions.
+      layoutFrame = requestAnimationFrame(checkPhoneArea);
     }
 
-    window.addEventListener("resize", () => {
-      scheduleLayout(true);
+    window.addEventListener("resize", scheduleSafetyCheck, {
+      passive: true
     });
 
-    window.addEventListener(
-      "scroll",
-      () => scheduleLayout(),
-      {
-        passive: true,
-        capture: true
-      }
-    );
+    window.addEventListener("scroll", scheduleSafetyCheck, {
+      passive: true,
+      capture: true
+    });
 
     if (window.ResizeObserver) {
-      observer = new ResizeObserver(() => {
-        scheduleLayout(true);
-      });
+      observer = new ResizeObserver(scheduleSafetyCheck);
 
       observer.observe(list);
-
       items.forEach(item => observer.observe(item));
 
       const phone = select(".phone-btn");
@@ -2142,15 +2161,31 @@
 
     return {
       start() {
-        if (started) return;
+        if (started || stopped) return;
 
         started = true;
-
         schedulePopup(options.initialDelay);
       },
 
       stop() {
         started = false;
+        stopped = true;
+
+        window.removeEventListener(
+          "resize",
+          scheduleSafetyCheck
+        );
+
+        window.removeEventListener(
+          "scroll",
+          scheduleSafetyCheck,
+          true
+        );
+
+        document.removeEventListener(
+          "visibilitychange",
+          onVisibility
+        );
 
         popupTimer?.kill();
         popupTimer = null;
@@ -2164,7 +2199,7 @@
     };
   }
 
-  // Phone reveal, halo sound, and proximity.
+  // Phone reveal, ring synchronization, and proximity
 
   function createPhone(options, sound, onProximity) {
     const button = select(".phone-btn");
@@ -2174,9 +2209,8 @@
     }
 
     const label =
-      button.parentElement?.querySelector(
-        ".phone-btn__label"
-      ) || select(".phone-btn__label");
+      button.parentElement?.querySelector(".phone-btn__label") ||
+      select(".phone-btn__label");
 
     const delay = readNumber(
       button,
@@ -2243,7 +2277,6 @@
               0,
               pointer.x - rect.right
             ),
-
             Math.max(
               rect.top - pointer.y,
               0,
@@ -2260,11 +2293,7 @@
           ? 1
           : 1 - t * t * (3 - 2 * t);
 
-      sound.setBackgroundLevel(
-        1 - proximity,
-        fade
-      );
-
+      sound.setBackgroundLevel(1 - proximity, fade);
       onProximity(proximity);
     }
 
@@ -2288,17 +2317,13 @@
       sound.playRing();
     }
 
-    button.addEventListener(
-      "animationstart",
-      onHaloPulse,
-      { signal: events.signal }
-    );
+    button.addEventListener("animationstart", onHaloPulse, {
+      signal: events.signal
+    });
 
-    button.addEventListener(
-      "animationiteration",
-      onHaloPulse,
-      { signal: events.signal }
-    );
+    button.addEventListener("animationiteration", onHaloPulse, {
+      signal: events.signal
+    });
 
     function haloDuration() {
       const raw = getComputedStyle(button)
@@ -2311,23 +2336,17 @@
         return 2.2;
       }
 
-      return raw.endsWith("ms")
-        ? value / 1000
-        : value;
+      return raw.endsWith("ms") ? value / 1000 : value;
     }
 
     function syncReducedMotionRinging() {
       clearTimeout(fallbackTimer);
       fallbackTimer = null;
 
-      if (!visible || !motionPreference.matches) {
-        return;
-      }
+      if (!visible || !motionPreference.matches) return;
 
       function pulse() {
-        if (!visible || !motionPreference.matches) {
-          return;
-        }
+        if (!visible || !motionPreference.matches) return;
 
         sound.playRing();
 
@@ -2349,9 +2368,7 @@
     window.addEventListener(
       "pointermove",
       event => {
-        if (event.pointerType === "touch") {
-          return;
-        }
+        if (event.pointerType === "touch") return;
 
         pointer = {
           x: event.clientX,
@@ -2385,24 +2402,16 @@
       { signal: events.signal }
     );
 
-    window.addEventListener(
-      "resize",
-      scheduleUpdate,
-      {
-        passive: true,
-        signal: events.signal
-      }
-    );
+    window.addEventListener("resize", scheduleUpdate, {
+      passive: true,
+      signal: events.signal
+    });
 
-    window.addEventListener(
-      "scroll",
-      scheduleUpdate,
-      {
-        passive: true,
-        capture: true,
-        signal: events.signal
-      }
-    );
+    window.addEventListener("scroll", scheduleUpdate, {
+      passive: true,
+      capture: true,
+      signal: events.signal
+    });
 
     button.addEventListener(
       "focusin",
@@ -2416,9 +2425,7 @@
     button.addEventListener(
       "focusout",
       event => {
-        if (button.contains(event.relatedTarget)) {
-          return;
-        }
+        if (button.contains(event.relatedTarget)) return;
 
         focused = false;
         scheduleUpdate();
@@ -2439,11 +2446,9 @@
           if (label) {
             gsap.to(label, {
               autoAlpha: 0.5,
-
               duration: motionPreference.matches
                 ? 0
                 : options.revealDuration,
-
               ease: "power2.out",
               overwrite: true
             });
@@ -2451,21 +2456,17 @@
 
           gsap.to(button, {
             autoAlpha: 1,
-
             duration: motionPreference.matches
               ? 0
               : options.revealDuration,
-
             ease: "power2.out",
             overwrite: true,
 
             onComplete() {
               visible = true;
-
               updateVolume();
 
               button.classList.add("is-ringing");
-
               syncReducedMotionRinging();
             }
           });
@@ -2481,51 +2482,37 @@
         clearTimeout(fallbackTimer);
         cancelAnimationFrame(frame);
 
-        const phoneGroup = button.closest(
-          "[data-phone-button]"
-        );
-
-        const targets = label
-          ? [button, label]
-          : [button];
+        const phoneGroup = button.closest("[data-phone-button]");
+        const targets = label ? [button, label] : [button];
 
         gsap.killTweensOf(targets);
-
         button.inert = true;
 
         gsap.to(targets, {
           autoAlpha: 0,
-
           duration: motionPreference.matches
             ? 0
             : SETTINGS.pickup.phoneFade,
-
           ease: "power2.out",
           overwrite: true,
 
           onComplete() {
             button.classList.remove("is-ringing");
-
-            phoneGroup?.setAttribute(
-              "data-phone-picked-up",
-              ""
-            );
+            phoneGroup?.setAttribute("data-phone-picked-up", "");
           }
         });
       }
     };
   }
 
-  // Popup sequence:
+  // Popup steps:
   // 1. Title and form
   // 2. SVG wave after successful submission
   // 3. Final title
 
   function createSteps(popup) {
     const items = Array.from(
-      popup?.querySelectorAll(
-        ".genius-ambient-popup__step"
-      ) || []
+      popup?.querySelectorAll(".genius-ambient-popup__step") || []
     );
 
     const [formStep, waveStep, finalStep] = items;
@@ -2541,10 +2528,7 @@
 
     const formWrap = formStep?.querySelector(".w-form");
     const form = formWrap?.querySelector("form");
-
-    const success = formWrap?.querySelector(
-      ".w-form-done"
-    );
+    const success = formWrap?.querySelector(".w-form-done");
 
     const formTarget =
       formWrap || formStep?.querySelector("form");
@@ -2571,9 +2555,7 @@
       step.removeAttribute("aria-hidden");
       step.classList.add("is-active");
 
-      gsap.set(step, {
-        autoAlpha: opacity
-      });
+      gsap.set(step, { autoAlpha: opacity });
     }
 
     function hide(step) {
@@ -2581,25 +2563,18 @@
       step.setAttribute("aria-hidden", "true");
       step.classList.remove("is-active");
 
-      gsap.set(step, {
-        autoAlpha: 0
-      });
+      gsap.set(step, { autoAlpha: 0 });
     }
 
     items.forEach(hide);
 
     if (formTarget) {
-      gsap.set(formTarget, {
-        autoAlpha: 0
-      });
-
+      gsap.set(formTarget, { autoAlpha: 0 });
       formTarget.inert = true;
     }
 
     function prepare(step) {
-      if (records.has(step)) {
-        return records.get(step);
-      }
+      if (records.has(step)) return records.get(step);
 
       const marked = Array.from(
         step.querySelectorAll("[data-step-title]")
@@ -2609,13 +2584,9 @@
         marked.length
           ? marked
           : Array.from(
-              step.querySelectorAll(
-                "h1,h2,h3,h4,h5,h6"
-              )
+              step.querySelectorAll("h1,h2,h3,h4,h5,h6")
             )
-      ).filter(
-        title => !title.closest(".w-form, form")
-      );
+      ).filter(title => !title.closest(".w-form, form"));
 
       const splits = [];
 
@@ -2629,7 +2600,6 @@
           });
 
           splits.push(split);
-
           return split.chars;
         }
 
@@ -2680,9 +2650,7 @@
 
     function finishStep(record) {
       hide(record.step);
-
       record.splits.forEach(split => split.revert());
-
       records.delete(record.step);
     }
 
@@ -2708,22 +2676,14 @@
           heights[i] / 2
       );
 
-      const maximum = Math.max(
-        wave.height,
-        ...heights
-      );
+      const maximum = Math.max(wave.height, ...heights);
 
       if (svg && bars.length) {
         const box = svg.viewBox.baseVal;
-
-        const top =
-          Math.min(...centers) - maximum / 2 - 8;
+        const top = Math.min(...centers) - maximum / 2 - 8;
 
         const height =
-          Math.max(...centers) +
-          maximum / 2 +
-          8 -
-          top;
+          Math.max(...centers) + maximum / 2 + 8 - top;
 
         svg.setAttribute(
           "viewBox",
@@ -2742,73 +2702,45 @@
         svg.setAttribute("focusable", "false");
       }
 
-      gsap.set(bars, {
-        opacity: 0
-      });
+      gsap.set(bars, { opacity: 0 });
 
       timeline.call(() => show(step));
 
       if (bars.length) {
         timeline.to(bars, {
           opacity: 1,
-
-          duration: reduced
-            ? 0.2
-            : wave.fadeIn,
-
+          duration: reduced ? 0.2 : wave.fadeIn,
           stagger: {
             each: reduced ? 0 : wave.barStagger,
             from: "start"
           },
-
           ease: "power2.out"
         });
       }
 
-      timeline.to({}, {
-        duration: wave.delay
-      });
+      timeline.to({}, { duration: wave.delay });
 
       if (!reduced && bars.length) {
         const start = timeline.duration();
+        const duration = Math.max(0.8, wave.duration);
+        const rise = Math.min(0.28, duration * 0.25);
+        const fall = Math.min(0.42, duration * 0.35);
 
-        const duration = Math.max(
-          0.8,
-          wave.duration
-        );
-
-        const rise = Math.min(
-          0.28,
-          duration * 0.25
-        );
-
-        const fall = Math.min(
-          0.42,
-          duration * 0.35
-        );
-
-        const spacing =
-          bars.length > 1
-            ? (duration - rise - fall) /
-              (bars.length - 1)
-            : 0;
+        const spacing = bars.length > 1
+          ? (duration - rise - fall) / (bars.length - 1)
+          : 0;
 
         bars.forEach((bar, i) => {
-          const progress =
-            bars.length > 1
-              ? i / (bars.length - 1)
-              : 0.5;
+          const progress = bars.length > 1
+            ? i / (bars.length - 1)
+            : 0.5;
 
           const strength =
-            Math.pow(
-              Math.sin(Math.PI * progress),
-              0.6
-            ) *
+            Math.pow(Math.sin(Math.PI * progress), 0.6) *
             (1 - progress * 0.55);
 
           const height =
-            heights[i] +
-            (maximum - heights[i]) * strength;
+            heights[i] + (maximum - heights[i]) * strength;
 
           timeline.to(
             bar,
@@ -2817,7 +2749,6 @@
                 height,
                 y: centers[i] - height / 2
               },
-
               duration: rise,
               ease: "sine.inOut"
             },
@@ -2831,7 +2762,6 @@
                 height: heights[i],
                 y: centers[i] - heights[i] / 2
               },
-
               duration: fall,
               ease: "sine.inOut"
             },
@@ -2839,28 +2769,19 @@
           );
         });
       } else {
-        timeline.to({}, {
-          duration: 0.5
-        });
+        timeline.to({}, { duration: 0.5 });
       }
 
-      timeline.to({}, {
-        duration: wave.hold
-      });
+      timeline.to({}, { duration: wave.hold });
 
       if (bars.length) {
         timeline.to(bars, {
           opacity: 0,
-
-          duration: reduced
-            ? 0.2
-            : wave.fadeOut,
-
+          duration: reduced ? 0.2 : wave.fadeOut,
           stagger: {
             each: reduced ? 0 : wave.barStagger,
             from: "start"
           },
-
           ease: "power2.inOut"
         });
       }
@@ -2881,12 +2802,7 @@
       completed = true;
 
       observer.disconnect();
-
-      form.removeEventListener(
-        "submit",
-        onSubmit,
-        true
-      );
+      form.removeEventListener("submit", onSubmit, true);
 
       formWrap.classList.add("is-success-exiting");
 
@@ -2900,9 +2816,7 @@
         popup.setAttribute("tabindex", "-1");
       }
 
-      popup.focus({
-        preventScroll: true
-      });
+      popup.focus({ preventScroll: true });
 
       const record = records.get(formStep);
       const timeline = gsap.timeline();
@@ -2917,36 +2831,25 @@
 
       timeline.call(() => {
         finishStep(record);
-
-        formWrap.classList.remove(
-          "is-success-exiting"
-        );
+        formWrap.classList.remove("is-success-exiting");
       });
 
-      timeline.to({}, {
-        duration: options.gap
-      });
+      timeline.to({}, { duration: options.gap });
 
       addWave(timeline);
 
-      timeline.to({}, {
-        duration: wave.finalDelay
-      });
+      timeline.to({}, { duration: wave.finalDelay });
 
       enter(timeline, prepare(finalStep));
 
       timeline.call(() => {
         finalStep.setAttribute("tabindex", "-1");
-
-        finalStep.focus({
-          preventScroll: true
-        });
+        finalStep.focus({ preventScroll: true });
       });
     }
 
     function onSubmit() {
       submitted = true;
-
       queueMicrotask(checkSuccess);
     }
 
@@ -2958,9 +2861,7 @@
         display === "none" ? "block" : display
       );
 
-      formWrap.classList.add(
-        "reception-sequence-form"
-      );
+      formWrap.classList.add("reception-sequence-form");
 
       const style = document.createElement("style");
 
@@ -2983,25 +2884,15 @@
 
       observer.observe(success, {
         attributes: true,
-        attributeFilter: [
-          "style",
-          "class",
-          "hidden"
-        ]
+        attributeFilter: ["style", "class", "hidden"]
       });
 
-      form.addEventListener(
-        "submit",
-        onSubmit,
-        true
-      );
+      form.addEventListener("submit", onSubmit, true);
     }
 
     return {
       async start() {
-        if (started || !items.length) {
-          return;
-        }
+        if (started || !items.length) return;
 
         started = true;
 
@@ -3020,11 +2911,7 @@
             formTarget,
             {
               autoAlpha: 1,
-
-              duration: reduced
-                ? 0.2
-                : options.formFade,
-
+              duration: reduced ? 0.2 : options.formFade,
               ease: "power2.out",
 
               onComplete() {
@@ -3043,12 +2930,10 @@
     };
   }
 
-  // Main page sequence
+  // Main sequence
 
   function setupPage() {
-    if (window.__receptionSequenceInitialized) {
-      return;
-    }
+    if (window.__receptionSequenceInitialized) return;
 
     if (!window.gsap || !window.ScrollTrigger) {
       console.warn(
@@ -3072,15 +2957,9 @@
       ".sound-wrap__btn:not(.sound-wrap__btn--corner)"
     );
 
-    const cornerButton = select(
-      ".sound-wrap__btn--corner"
-    );
-
+    const cornerButton = select(".sound-wrap__btn--corner");
     const phoneButton = select(".phone-btn");
-
-    const popup = select(
-      ".genius-ambient-popup"
-    );
+    const popup = select(".genius-ambient-popup");
 
     const steps = createSteps(popup);
 
@@ -3090,7 +2969,6 @@
 
     if (backdrop) {
       backdrop.className = "genius-ambient-backdrop";
-
       backdrop.setAttribute("aria-hidden", "true");
 
       popup.before(backdrop);
@@ -3101,25 +2979,20 @@
       });
     }
 
-    const videoWrap = popup?.querySelector(
-      ".video-wrap"
-    );
+    const videoWrap = popup?.querySelector(".video-wrap");
 
     const video = videoWrap?.matches("video")
       ? videoWrap
       : videoWrap?.querySelector("video");
 
     if (videoWrap) {
-      gsap.set(videoWrap, {
-        autoAlpha: 0
-      });
+      gsap.set(videoWrap, { autoAlpha: 0 });
     }
 
     if (video) {
       video.muted = true;
       video.playsInline = true;
       video.autoplay = false;
-
       video.pause();
     }
 
@@ -3127,13 +3000,8 @@
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    const sound = createSoundManager(
-      SETTINGS.sound
-    );
-
-    const phoneZone = createPhoneZone(
-      SETTINGS.phone
-    );
+    const sound = createSoundManager(SETTINGS.sound);
+    const phoneZone = createPhoneZone(SETTINGS.phone);
 
     const trail = createTrail(
       SETTINGS.trail,
@@ -3187,9 +3055,7 @@
     }
 
     if (popup) {
-      gsap.set(popup, {
-        autoAlpha: 0
-      });
+      gsap.set(popup, { autoAlpha: 0 });
 
       popup.inert = true;
       popup.setAttribute("aria-hidden", "true");
@@ -3206,16 +3072,11 @@
         pointerEvents: "auto"
       });
 
-      if (
-        getComputedStyle(cornerButton).position ===
-        "static"
-      ) {
+      if (getComputedStyle(cornerButton).position === "static") {
         cornerButton.style.position = "relative";
       }
 
-      gsap.set(cornerButton, {
-        autoAlpha: 0
-      });
+      gsap.set(cornerButton, { autoAlpha: 0 });
 
       cornerButton.disabled = true;
       cornerButton.setAttribute("aria-hidden", "true");
@@ -3225,22 +3086,11 @@
       if (!cornerButton) return;
 
       const enabled = sound.isEnabled();
-
-      const action = enabled
-        ? "Mute sound"
-        : "Enable sound";
+      const action = enabled ? "Mute sound" : "Enable sound";
 
       cornerButton.disabled = soundPending;
-
-      cornerButton.setAttribute(
-        "aria-label",
-        action
-      );
-
-      cornerButton.setAttribute(
-        "title",
-        action
-      );
+      cornerButton.setAttribute("aria-label", action);
+      cornerButton.setAttribute("title", action);
 
       if (soundPending) {
         cornerButton.setAttribute("aria-busy", "true");
@@ -3272,20 +3122,14 @@
 
       gsap.to(cornerButton, {
         autoAlpha: 1,
-
-        duration: reducedMotion
-          ? 0
-          : SETTINGS.cornerFade,
-
+        duration: reducedMotion ? 0 : SETTINGS.cornerFade,
         ease: "power2.out",
         overwrite: true
       });
     }
 
     function requestSound() {
-      if (soundPending || sound.isEnabled()) {
-        return;
-      }
+      if (soundPending || sound.isEnabled()) return;
 
       soundPending = true;
       updateCornerButton();
@@ -3320,15 +3164,10 @@
       if (transitioning) return;
 
       transitioning = true;
-
       clearTimeout(timeout);
 
       if (mainButton) {
-        mainButton.removeEventListener(
-          "click",
-          onMainClick
-        );
-
+        mainButton.removeEventListener("click", onMainClick);
         mainButton.disabled = true;
       }
 
@@ -3351,11 +3190,7 @@
 
       gsap.to(overlay, {
         autoAlpha: 0,
-
-        duration: reducedMotion
-          ? 0
-          : SETTINGS.overlayFade,
-
+        duration: reducedMotion ? 0 : SETTINGS.overlayFade,
         ease: "power2.out",
         overwrite: true,
 
@@ -3368,7 +3203,6 @@
 
     function onMainClick(event) {
       event.preventDefault();
-
       begin(true);
     }
 
@@ -3388,33 +3222,22 @@
     function onPickup(event) {
       event.preventDefault();
 
-      if (!experienceStarted || pickedUp) {
-        return;
-      }
+      if (!experienceStarted || pickedUp) return;
 
       if (!popup) {
-        console.warn(
-          "Missing .genius-ambient-popup."
-        );
-
+        console.warn("Missing .genius-ambient-popup.");
         return;
       }
 
       pickedUp = true;
 
-      phoneButton.removeEventListener(
-        "click",
-        onPickup
-      );
+      phoneButton.removeEventListener("click", onPickup);
 
       trail.stop?.();
       random.stop?.();
       phone.stop?.();
 
-      sound.fadeOutAll(
-        SETTINGS.pickup.soundFade
-      );
-
+      sound.fadeOutAll(SETTINGS.pickup.soundFade);
       updateCornerButton();
 
       popup.inert = false;
@@ -3429,9 +3252,7 @@
         backdrop,
         {
           autoAlpha: 1,
-
-          "--ambient-blur":
-            `${SETTINGS.backdrop.blur}px`,
+          "--ambient-blur": `${SETTINGS.backdrop.blur}px`,
 
           duration: reducedMotion
             ? 0
@@ -3460,9 +3281,7 @@
               popup.setAttribute("tabindex", "-1");
             }
 
-            popup.focus({
-              preventScroll: true
-            });
+            popup.focus({ preventScroll: true });
           }
         },
         0
@@ -3484,9 +3303,7 @@
             });
           }
 
-          sound.startAmbient(
-            SETTINGS.ambient
-          );
+          sound.startAmbient(SETTINGS.ambient);
         },
         [],
         videoDelay
@@ -3516,32 +3333,20 @@
       );
     }
 
-    phoneButton?.addEventListener(
-      "click",
-      onPickup
-    );
-
-    cornerButton?.addEventListener(
-      "click",
-      onCornerClick
-    );
+    phoneButton?.addEventListener("click", onPickup);
+    cornerButton?.addEventListener("click", onCornerClick);
 
     if (!overlay) {
       begin(false);
       return;
     }
 
-    gsap.set(overlay, {
-      autoAlpha: 1
-    });
+    gsap.set(overlay, { autoAlpha: 1 });
 
     overlay.inert = false;
     overlay.removeAttribute("aria-hidden");
 
-    mainButton?.addEventListener(
-      "click",
-      onMainClick
-    );
+    mainButton?.addEventListener("click", onMainClick);
 
     const waitSeconds = readNumber(
       overlay,
