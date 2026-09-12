@@ -127,7 +127,7 @@
       mobileGap: 12,
 
       // Target number of fully or partially visible notifications.
-      mobileVisibleTarget: 9,
+      mobileVisibleTarget: 16,
 
       // Maximum overlap relative to the smaller card's area.
       mobileMaxOverlap: 0.22,
