@@ -39,28 +39,31 @@
       formDelay: 0.08,
       formFade: 0.35,
 
-      // Faster transition from the form into the loading step.
-      submitExit: 0.2,
-      submitStagger: 0.12
+      // Submission sequence.
+      submitFormFade: 0.3,
+      submitTitleDelay: 0.08,
+      submitExit: 0.6,
+      submitStagger: 0.025
     },
 
     wave: {
-      fadeIn: 0.2,
-      barStagger: 0.02,
+      fadeIn: 0.3,
+      barStagger: 0.025,
 
-      // Maximum bar height.
-      height: 56,
+      // Maximum height in SVG viewBox units.
+      height: 64,
 
-      // Unequal durations for speech-like movement.
-      minBeat: 0.12,
-      maxBeat: 0.28,
+      // Unequal speech-like beats.
+      minBeat: 0.16,
+      maxBeat: 0.32,
 
-      // Avoid flashing the loader on very fast responses.
-      minimumLoading: 0.6,
+      // Minimum talking time, followed by an additional hold.
+      minimumLoading: 2.5,
+      resultHold: 0.8,
 
-      settle: 0.15,
-      fadeOut: 0.2,
-      finalDelay: 0.1
+      settle: 0.25,
+      fadeOut: 0.35,
+      finalDelay: 0.15
     },
 
     phone: {
@@ -130,7 +133,7 @@
 
       mobileBreakpoint: 768,
       mobileGap: 12,
-      mobileVisibleTarget: 16,
+      mobileVisibleTarget: 9,
       mobileMaxOverlap: 0.22,
       mobileMinVisible: 0.55
     }
@@ -416,6 +419,7 @@
 
       if (fade > 0) {
         asset.output.gain.setValueAtTime(0, now);
+
         asset.output.gain.linearRampToValueAtTime(
           volume,
           now + fade
@@ -721,6 +725,7 @@
       const now = context.currentTime;
 
       masterOutput.gain.cancelScheduledValues(now);
+
       masterOutput.gain.setValueAtTime(
         masterOutput.gain.value,
         now
@@ -789,7 +794,11 @@
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    const minInterval = Math.max(0.05, options.minInterval);
+    const minInterval = Math.max(
+      0.05,
+      options.minInterval
+    );
+
     const maxInterval = Math.max(
       minInterval,
       options.maxInterval
@@ -953,7 +962,6 @@
       if (record) {
         record.current++;
         record.write(record.current);
-
         reveal(record);
         sound.ping();
       }
@@ -1195,7 +1203,11 @@
       gsap.killTweensOf(item);
 
       if (useFall) {
-        gsap.set(item, { x: 0, y: 0, rotation: 0 });
+        gsap.set(item, {
+          x: 0,
+          y: 0,
+          rotation: 0
+        });
       }
 
       gsap.set(item, {
@@ -1421,6 +1433,7 @@
     const entrances = new Map();
     const blocked = new Set();
 
+    // Prevent off-screen cards from creating scrollable overflow.
     wrapper.style.overflow = "clip";
 
     gsap.set(items, {
@@ -1634,6 +1647,7 @@
         });
       }
 
+      // Fill visible areas before placing overflow cards.
       for (const item of items) {
         const size = sizeByItem.get(item);
 
@@ -1982,7 +1996,11 @@
         placementsByItem.set(item, best);
 
         if (!best) {
-          gsap.set(item, { autoAlpha: 0, y: 0 });
+          gsap.set(item, {
+            autoAlpha: 0,
+            y: 0
+          });
+
           return;
         }
 
@@ -2001,7 +2019,11 @@
 
     function animateIn(item) {
       if (reducedMotion) {
-        gsap.set(item, { autoAlpha: 1, y: 0 });
+        gsap.set(item, {
+          autoAlpha: 1,
+          y: 0
+        });
+
         return;
       }
 
@@ -2040,7 +2062,8 @@
     }
 
     function nextDelay() {
-      const elapsed = (performance.now() - startedAt) / 1000;
+      const elapsed =
+        (performance.now() - startedAt) / 1000;
 
       const progress = clamp(
         elapsed / Math.max(0.1, options.rampDuration),
@@ -2056,7 +2079,12 @@
       const start = Math.max(0.05, options.startInterval);
       const end = clamp(options.endInterval, 0.05, start);
       const base = start * Math.pow(end / start, curve);
-      const variation = clamp(options.timingVariation, 0, 0.5);
+
+      const variation = clamp(
+        options.timingVariation,
+        0,
+        0.5
+      );
 
       return Math.max(
         reducedMotion ? 0.75 : 0.05,
@@ -2176,6 +2204,7 @@
         return;
       }
 
+      // Preserve assigned positions on both desktop and mobile.
       layoutFrame = requestAnimationFrame(checkPhoneArea);
     }
 
@@ -2488,9 +2517,11 @@
           if (label) {
             gsap.to(label, {
               autoAlpha: 0.5,
+
               duration: motionPreference.matches
                 ? 0
                 : options.revealDuration,
+
               ease: "power2.out",
               overwrite: true
             });
@@ -2498,9 +2529,11 @@
 
           gsap.to(button, {
             autoAlpha: 1,
+
             duration: motionPreference.matches
               ? 0
               : options.revealDuration,
+
             ease: "power2.out",
             overwrite: true,
 
@@ -2532,9 +2565,11 @@
 
         gsap.to(targets, {
           autoAlpha: 0,
+
           duration: motionPreference.matches
             ? 0
             : SETTINGS.pickup.phoneFade,
+
           ease: "power2.out",
           overwrite: true,
 
@@ -2549,9 +2584,9 @@
 
   // Popup sequence:
   // 1. Title and form
-  // 2. Loading bars while Webflow submits
+  // 2. Loading animation during submission
   // 3. Final title on success
-  // Failure returns to step 1.
+  // Failure returns to the form with entered values preserved.
 
   function createSteps(popup) {
     const items = Array.from(
@@ -2726,10 +2761,15 @@
 
       if (svg && bars.length) {
         const box = svg.viewBox.baseVal;
-        const top = Math.min(...centers) - maximum / 2 - 8;
+
+        const top =
+          Math.min(...centers) - maximum / 2 - 8;
 
         const height =
-          Math.max(...centers) + maximum / 2 + 8 - top;
+          Math.max(...centers) +
+          maximum / 2 +
+          8 -
+          top;
 
         svg.setAttribute(
           "viewBox",
@@ -2779,16 +2819,22 @@
 
       if (!bars.length) return;
 
-      // Irregular speech-like motion.
-      // This is not synchronized to the ambient audio waveform.
+      // Speech-like motion, not analysis of the ambient soundtrack.
+      let peak = 0.47;
+
       function beat() {
         if (phase !== "loading") return;
 
-        const quiet = Math.random() < 0.18;
+        const quiet = Math.random() < 0.14;
 
         const energy = quiet
-          ? randomBetween(0.02, 0.12)
-          : randomBetween(0.35, 1);
+          ? randomBetween(0.03, 0.12)
+          : randomBetween(0.78, 1);
+
+        peak +=
+          (randomBetween(0.38, 0.6) - peak) * 0.45;
+
+        const spread = randomBetween(0.075, 0.115);
 
         const duration = randomBetween(
           wave.minBeat,
@@ -2804,13 +2850,16 @@
             ? i / (bars.length - 1)
             : 0.5;
 
-          const shape =
-            0.3 + 0.7 * Math.sin(Math.PI * position);
+          const distance = (position - peak) / spread;
+
+          const shape = Math.exp(
+            -0.5 * distance * distance
+          );
 
           const strength =
-            Math.pow(Math.random(), 0.65) *
+            shape *
             energy *
-            shape;
+            randomBetween(0.88, 1);
 
           const height =
             heights[i] +
@@ -2927,7 +2976,10 @@
       timeline.call(() => {
         hide(waveStep);
         popup.removeAttribute("aria-busy");
-        formWrap.classList.remove("is-success-exiting");
+
+        formWrap.classList.remove(
+          "is-success-exiting"
+        );
       });
 
       if (succeeded) {
@@ -2984,7 +3036,7 @@
       );
 
       resultDelay = gsap.delayedCall(
-        remaining,
+        remaining + wave.resultHold,
         finishLoading
       );
     }
@@ -2997,10 +3049,12 @@
         return;
       }
 
-      // React to fresh Webflow updates, not a previous error.
+      // Only react to fresh Webflow result updates.
       const changed = element =>
         element &&
-        mutations.some(mutation => mutation.target === element);
+        mutations.some(
+          mutation => mutation.target === element
+        );
 
       if (
         changed(success) &&
@@ -3024,7 +3078,7 @@
       result = null;
       phase = "submitting";
 
-      // Keep the form present during its exit, even on a fast response.
+      // Keep layout space intact while form and title exit.
       formWrap.classList.add("is-success-exiting");
       popup.setAttribute("aria-busy", "true");
 
@@ -3054,34 +3108,40 @@
 
       const timeline = gsap.timeline();
 
+      // 1. Fade out the form first.
+      timeline.to(formTarget, {
+        autoAlpha: 0,
+
+        duration: reduced
+          ? 0.15
+          : options.submitFormFade,
+
+        ease: "power2.inOut"
+      });
+
+      // 2. Let the title exit fully from left to right.
       if (record.chars.length) {
         timeline.to(
           record.chars,
           {
             ...hidden,
-            duration: reduced ? 0.15 : options.submitExit,
+
+            duration: reduced
+              ? 0.15
+              : options.submitExit,
 
             stagger: {
-              amount: reduced ? 0 : options.submitStagger,
+              each: reduced ? 0 : options.submitStagger,
               from: "start"
             },
 
-            ease: "power2.in"
+            ease: "power2.inOut"
           },
-          0
+          `+=${options.submitTitleDelay}`
         );
       }
 
-      timeline.to(
-        formTarget,
-        {
-          autoAlpha: 0,
-          duration: reduced ? 0.15 : options.submitExit,
-          ease: "power2.inOut"
-        },
-        0
-      );
-
+      // 3. Show the loading step.
       timeline.call(() => {
         hide(formStep);
         show(waveStep);
@@ -3101,6 +3161,7 @@
         });
       }
 
+      // 4. Keep animating until the result and timing allow exit.
       timeline.call(() => {
         phase = "loading";
         loadingAt = performance.now();
@@ -3109,7 +3170,7 @@
         scheduleResult();
       });
 
-      // Webflow still performs the actual submission.
+      // Webflow submits in parallel with this animation.
       // Do not preventDefault or replace its submission handler.
     }
 
@@ -3127,7 +3188,9 @@
         display === "none" ? "block" : display
       );
 
-      formWrap.classList.add("reception-sequence-form");
+      formWrap.classList.add(
+        "reception-sequence-form"
+      );
 
       const style = document.createElement("style");
 
@@ -3327,7 +3390,9 @@
         pointerEvents: "auto"
       });
 
-      if (getComputedStyle(cornerButton).position === "static") {
+      if (
+        getComputedStyle(cornerButton).position === "static"
+      ) {
         cornerButton.style.position = "relative";
       }
 
