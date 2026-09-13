@@ -39,7 +39,6 @@
       formDelay: 0.08,
       formFade: 0.35,
 
-      // Submission sequence.
       submitFormFade: 0.3,
       submitTitleDelay: 0.08,
       submitExit: 0.6,
@@ -49,19 +48,15 @@
     wave: {
       fadeIn: 0.3,
       barStagger: 0.025,
-
-      // Maximum height in SVG viewBox units.
       height: 64,
-
-      // Unequal speech-like beats.
       minBeat: 0.16,
       maxBeat: 0.32,
 
-      // Minimum talking time, followed by an additional hold.
+      // Full loading time after the entrance finishes.
       minimumLoading: 2.5,
       resultHold: 0.8,
 
-      settle: 0.25,
+      // Voice motion continues throughout this fade.
       fadeOut: 0.35,
       finalDelay: 0.15
     },
@@ -123,23 +118,19 @@
       rampDuration: 5,
       acceleration: 1.5,
       timingVariation: 0.15,
-
       fadeDuration: 0.22,
       moveDuration: 0.45,
       moveUp: 16,
-
       edgePadding: 24,
       scatter: 0.7,
 
       mobileBreakpoint: 768,
       mobileGap: 12,
-      mobileVisibleTarget: 16,
+      mobileVisibleTarget: 9,
       mobileMaxOverlap: 0.22,
       mobileMinVisible: 0.55
     }
   };
-
-  // Utilities
 
   const select = selector => document.querySelector(selector);
 
@@ -169,8 +160,6 @@
       ? value
       : fallback;
   }
-
-  // Protected phone area
 
   function createPhoneZone(options) {
     const button = select(".phone-btn");
@@ -222,7 +211,6 @@
         right: rect.right,
         bottom: rect.bottom,
         label: label?.getBoundingClientRect(),
-
         clearance: readNumber(
           button,
           "data-phone-clearance",
@@ -273,13 +261,17 @@
       };
     }
 
-    function blocksPlacement(candidate, origin, zone, moveDown = 0) {
+    function blocksPlacement(
+      candidate,
+      origin,
+      zone,
+      moveDown = 0
+    ) {
       return overlaps(
         {
           left: origin.x + candidate.x,
           top: origin.y + candidate.y,
           right: origin.x + candidate.x + candidate.width,
-
           bottom:
             origin.y +
             candidate.y +
@@ -298,20 +290,16 @@
     };
   }
 
-  // Audio
-
   function createSoundManager(options) {
     let context = null;
     let enabled = false;
     let typingRequested = false;
-
     let backgroundOutput = null;
     let masterOutput = null;
-    let backgroundLevel = 1;
-
     let finished = false;
     let ambientSettings = null;
     let oldAudioTimer = null;
+    let backgroundLevel = 1;
     let attemptId = 0;
 
     const pingSources = new Set();
@@ -370,6 +358,7 @@
         asset.decodePromise = preload(asset)
           .then(bytes => {
             if (!bytes) return null;
+
             return context.decodeAudioData(bytes.slice(0));
           })
           .then(buffer => {
@@ -403,7 +392,6 @@
       const source = context.createBufferSource();
 
       source.buffer = asset.buffer;
-
       source.loop =
         asset === assets.ambient
           ? ambientSettings.loop
@@ -419,7 +407,6 @@
 
       if (fade > 0) {
         asset.output.gain.setValueAtTime(0, now);
-
         asset.output.gain.linearRampToValueAtTime(
           volume,
           now + fade
@@ -643,9 +630,7 @@
 
             enabled = success;
 
-            if (enabled) {
-              startRequestedLoops();
-            }
+            if (enabled) startRequestedLoops();
 
             resolve(success);
           }
@@ -666,7 +651,6 @@
       } catch (error) {
         enabled = false;
         console.warn("Could not enable audio:", error);
-
         return Promise.resolve(false);
       }
     }
@@ -725,7 +709,6 @@
       const now = context.currentTime;
 
       masterOutput.gain.cancelScheduledValues(now);
-
       masterOutput.gain.setValueAtTime(
         masterOutput.gain.value,
         now
@@ -763,20 +746,17 @@
 
     return {
       enable,
-      disable,
       fadeOutAll,
       startAmbient,
       play,
       ping,
       playRing,
+      disable,
       setBackgroundLevel,
-
       isEnabled: () =>
         enabled && context?.state === "running"
     };
   }
-
-  // Optional badge counting
 
   function createBadgeCounters(
     items,
@@ -794,11 +774,7 @@
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    const minInterval = Math.max(
-      0.05,
-      options.minInterval
-    );
-
+    const minInterval = Math.max(0.05, options.minInterval);
     const maxInterval = Math.max(
       minInterval,
       options.maxInterval
@@ -973,9 +949,7 @@
       clearTimeout(timer);
       timer = null;
 
-      if (!document.hidden) {
-        schedule();
-      }
+      if (!document.hidden) schedule();
     });
 
     return {
@@ -1000,8 +974,6 @@
       }
     };
   }
-
-  // Mouse trail
 
   function createTrail(options, phoneZone) {
     const wrapper = select("[data-trail-wrapper]");
@@ -1114,6 +1086,7 @@
       if (!item || retained.has(item)) return;
 
       timestamps.delete(item);
+
       activeItems = activeItems.filter(value => value !== item);
 
       if (!useFall) {
@@ -1140,7 +1113,8 @@
       });
 
       const clearance =
-        Math.hypot(item.offsetWidth, item.offsetHeight) / 2 + 24;
+        Math.hypot(item.offsetWidth, item.offsetHeight) / 2 +
+        24;
 
       const distance = Math.max(
         40,
@@ -1164,7 +1138,9 @@
         overwrite: "auto",
 
         onUpdate() {
-          if (phoneZone.overlaps(item.getBoundingClientRect())) {
+          if (
+            phoneZone.overlaps(item.getBoundingClientRect())
+          ) {
             hideImmediately(item);
           }
         },
@@ -1217,6 +1193,7 @@
       });
 
       timestamps.delete(item);
+
       activeItems = activeItems.filter(value => value !== item);
       visibleItems.add(item);
 
@@ -1257,7 +1234,6 @@
       if (!active) return;
 
       const origin = phoneZone.getOrigin(list);
-
       const x = event.clientX - origin.x;
       const y = event.clientY - origin.y;
 
@@ -1276,13 +1252,9 @@
 
       if (!item) return;
 
-      if (activate(item, x, y)) {
-        globalIndex++;
-      }
+      if (activate(item, x, y)) globalIndex++;
 
-      if (retained.size === items.length) {
-        stop();
-      }
+      if (retained.size === items.length) stop();
     }
 
     function stop() {
@@ -1370,7 +1342,6 @@
       stop() {
         unlocked = false;
         stop();
-
         trigger.kill();
 
         document.removeEventListener("visibilitychange", sync);
@@ -1393,23 +1364,17 @@
     };
   }
 
-  // Random notifications
-
   function createRandomNotifications(options, sound, phoneZone) {
     const wrapper = select("[data-random-wrapper]");
     const list = wrapper?.querySelector("[data-random-list]");
 
-    if (!list) {
-      return { start() {} };
-    }
+    if (!list) return { start() {} };
 
     const items = shuffle(
       Array.from(list.querySelectorAll("[data-random-item]"))
     );
 
-    if (!items.length) {
-      return { start() {} };
-    }
+    if (!items.length) return { start() {} };
 
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
@@ -1418,22 +1383,20 @@
     const entranceMove = reducedMotion ? 0 : options.moveUp;
 
     let started = false;
-    let stopped = false;
     let index = 0;
     let startedAt = null;
     let layoutFrame = null;
     let layoutReady = false;
     let popupTimer = null;
     let observer = null;
-
+    let stopped = false;
     let hiddenAt = document.hidden ? performance.now() : null;
 
+    const blocked = new Set();
     const placementsByItem = new Map();
     const shown = new Set();
     const entrances = new Map();
-    const blocked = new Set();
 
-    // Prevent off-screen cards from creating scrollable overflow.
     wrapper.style.overflow = "clip";
 
     gsap.set(items, {
@@ -1441,23 +1404,10 @@
       y: 0
     });
 
-    const counters = createBadgeCounters(
-      items,
-      SETTINGS.counter,
-      sound,
-      item =>
-        shown.has(item) &&
-        !blocked.has(item) &&
-        !entrances.has(item) &&
-        isOnScreen(item)
-    );
-
     function schedulePopup(seconds) {
       popupTimer = gsap.delayedCall(seconds, showNext);
 
-      if (document.hidden) {
-        popupTimer.pause();
-      }
+      if (document.hidden) popupTimer.pause();
     }
 
     function onVisibility() {
@@ -1476,6 +1426,17 @@
     }
 
     document.addEventListener("visibilitychange", onVisibility);
+
+    const counters = createBadgeCounters(
+      items,
+      SETTINGS.counter,
+      sound,
+      item =>
+        shown.has(item) &&
+        !blocked.has(item) &&
+        !entrances.has(item) &&
+        isOnScreen(item)
+    );
 
     function createSlots(count, width, height) {
       const columns = Math.max(
@@ -1598,21 +1559,10 @@
         Math.max(1, Math.round(options.mobileVisibleTarget))
       );
 
-      const maxOverlap = clamp(
-        options.mobileMaxOverlap,
-        0,
-        0.5
-      );
+      const maxOverlap = clamp(options.mobileMaxOverlap, 0, 0.5);
+      const minVisible = clamp(options.mobileMinVisible, 0.2, 1);
 
-      const minVisible = clamp(
-        options.mobileMinVisible,
-        0.2,
-        1
-      );
-
-      const slots = orderSlots(
-        createSlots(target, width, height)
-      );
+      const slots = orderSlots(createSlots(target, width, height));
 
       const placed = [];
       const visibleItems = [];
@@ -1647,7 +1597,6 @@
         });
       }
 
-      // Fill visible areas before placing overflow cards.
       for (const item of items) {
         const size = sizeByItem.get(item);
 
@@ -1672,8 +1621,7 @@
           const candidate = { x, y, ...size };
 
           const fraction =
-            visibleArea(candidate) /
-            (size.width * size.height);
+            visibleArea(candidate) / (size.width * size.height);
 
           if (fraction < minVisible) return;
 
@@ -1736,10 +1684,7 @@
               randomBetween(-0.5, 0.5) * slot.height * height
             : randomBetween(0, height);
 
-          consider(
-            x - size.width / 2,
-            y - size.height / 2
-          );
+          consider(x - size.width / 2, y - size.height / 2);
         }
 
         for (let row = 0; row <= 12; row++) {
@@ -1791,10 +1736,7 @@
 
         const candidate = {
           x,
-          y: randomBetween(
-            0,
-            Math.max(0, height - size.height)
-          ),
+          y: randomBetween(0, Math.max(0, height - size.height)),
           ...size
         };
 
@@ -1829,10 +1771,7 @@
       const origin = phoneZone.getOrigin(list);
       const zone = phoneZone.getRect();
 
-      const paddingX = Math.min(
-        options.edgePadding,
-        width / 4
-      );
+      const paddingX = Math.min(options.edgePadding, width / 4);
 
       const paddingY = Math.min(
         Math.max(options.edgePadding, entranceMove),
@@ -1849,7 +1788,6 @@
 
       if (window.innerWidth < options.mobileBreakpoint) {
         buildMobileLayout(width, height, origin, zone, sizes);
-
         layoutReady = true;
         return true;
       }
@@ -1878,9 +1816,8 @@
         const slot = slots[i];
         const size = sizes[i];
 
-        const progress = items.length > 1
-          ? i / (items.length - 1)
-          : 0;
+        const progress =
+          items.length > 1 ? i / (items.length - 1) : 0;
 
         const allowedOverlap =
           0.05 + 0.45 * density * Math.pow(progress, 1.2);
@@ -1900,7 +1837,6 @@
         ) {
           const minX = Math.min(paddingX, availableX / 2);
           const minY = Math.min(paddingY, availableY / 2);
-
           const maxX = availableX - minX;
           const maxY = availableY - minY;
 
@@ -1953,11 +1889,7 @@
             }
           }
 
-          for (
-            let attempt = 0;
-            attempt < 40 && !acceptable;
-            attempt++
-          ) {
+          for (let attempt = 0; attempt < 40 && !acceptable; attempt++) {
             consider(
               centerX +
                 randomBetween(-jitterX / 2, jitterX / 2) -
@@ -1968,11 +1900,7 @@
             );
           }
 
-          for (
-            let attempt = 0;
-            attempt < 64 && !acceptable;
-            attempt++
-          ) {
+          for (let attempt = 0; attempt < 64 && !acceptable; attempt++) {
             consider(
               randomBetween(minX, maxX),
               randomBetween(minY, maxY)
@@ -1980,11 +1908,7 @@
           }
 
           for (let row = 0; row <= 8 && !acceptable; row++) {
-            for (
-              let column = 0;
-              column <= 8 && !acceptable;
-              column++
-            ) {
+            for (let column = 0; column <= 8 && !acceptable; column++) {
               consider(
                 minX + ((maxX - minX) * column) / 8,
                 minY + ((maxY - minY) * row) / 8
@@ -1996,11 +1920,10 @@
         placementsByItem.set(item, best);
 
         if (!best) {
-          gsap.set(item, {
-            autoAlpha: 0,
-            y: 0
-          });
-
+          entrances.get(item)?.kill();
+          entrances.delete(item);
+          gsap.killTweensOf(item);
+          gsap.set(item, { autoAlpha: 0, y: 0 });
           return;
         }
 
@@ -2019,11 +1942,7 @@
 
     function animateIn(item) {
       if (reducedMotion) {
-        gsap.set(item, {
-          autoAlpha: 1,
-          y: 0
-        });
-
+        gsap.set(item, { autoAlpha: 1, y: 0 });
         return;
       }
 
@@ -2040,30 +1959,29 @@
 
       entrances.set(item, animation);
 
-      animation.to(
-        item,
-        {
-          autoAlpha: 1,
-          duration: options.fadeDuration,
-          ease: "power2.out"
-        },
-        0
-      );
-
-      animation.to(
-        item,
-        {
-          y: 0,
-          duration: options.moveDuration,
-          ease: "power3.out"
-        },
-        0
-      );
+      animation
+        .to(
+          item,
+          {
+            autoAlpha: 1,
+            duration: options.fadeDuration,
+            ease: "power2.out"
+          },
+          0
+        )
+        .to(
+          item,
+          {
+            y: 0,
+            duration: options.moveDuration,
+            ease: "power3.out"
+          },
+          0
+        );
     }
 
     function nextDelay() {
-      const elapsed =
-        (performance.now() - startedAt) / 1000;
+      const elapsed = (performance.now() - startedAt) / 1000;
 
       const progress = clamp(
         elapsed / Math.max(0.1, options.rampDuration),
@@ -2078,13 +1996,9 @@
 
       const start = Math.max(0.05, options.startInterval);
       const end = clamp(options.endInterval, 0.05, start);
-      const base = start * Math.pow(end / start, curve);
 
-      const variation = clamp(
-        options.timingVariation,
-        0,
-        0.5
-      );
+      const base = start * Math.pow(end / start, curve);
+      const variation = clamp(options.timingVariation, 0, 0.5);
 
       return Math.max(
         reducedMotion ? 0.75 : 0.05,
@@ -2204,7 +2118,7 @@
         return;
       }
 
-      // Preserve assigned positions on both desktop and mobile.
+      // Assigned positions remain stable on resize and scroll.
       layoutFrame = requestAnimationFrame(checkPhoneArea);
     }
 
@@ -2225,9 +2139,7 @@
 
       const phone = select(".phone-btn");
 
-      if (phone) {
-        observer.observe(phone);
-      }
+      if (phone) observer.observe(phone);
     }
 
     return {
@@ -2242,21 +2154,9 @@
         started = false;
         stopped = true;
 
-        window.removeEventListener(
-          "resize",
-          scheduleSafetyCheck
-        );
-
-        window.removeEventListener(
-          "scroll",
-          scheduleSafetyCheck,
-          true
-        );
-
-        document.removeEventListener(
-          "visibilitychange",
-          onVisibility
-        );
+        window.removeEventListener("resize", scheduleSafetyCheck);
+        window.removeEventListener("scroll", scheduleSafetyCheck, true);
+        document.removeEventListener("visibilitychange", onVisibility);
 
         popupTimer?.kill();
         popupTimer = null;
@@ -2270,14 +2170,10 @@
     };
   }
 
-  // Phone reveal, ring synchronization, and proximity
-
   function createPhone(options, sound, onProximity) {
     const button = select(".phone-btn");
 
-    if (!button) {
-      return { start() {} };
-    }
+    if (!button) return { start() {} };
 
     const label =
       button.parentElement?.querySelector(".phone-btn__label") ||
@@ -2316,9 +2212,7 @@
 
     const events = new AbortController();
 
-    if (label) {
-      gsap.set(label, { autoAlpha: 0 });
-    }
+    if (label) gsap.set(label, { autoAlpha: 0 });
 
     gsap.set(button, { autoAlpha: 0 });
 
@@ -2403,9 +2297,7 @@
 
       const value = parseFloat(raw);
 
-      if (!Number.isFinite(value) || value <= 0) {
-        return 2.2;
-      }
+      if (!Number.isFinite(value) || value <= 0) return 2.2;
 
       return raw.endsWith("ms") ? value / 1000 : value;
     }
@@ -2517,11 +2409,9 @@
           if (label) {
             gsap.to(label, {
               autoAlpha: 0.5,
-
               duration: motionPreference.matches
                 ? 0
                 : options.revealDuration,
-
               ease: "power2.out",
               overwrite: true
             });
@@ -2529,18 +2419,15 @@
 
           gsap.to(button, {
             autoAlpha: 1,
-
             duration: motionPreference.matches
               ? 0
               : options.revealDuration,
-
             ease: "power2.out",
             overwrite: true,
 
             onComplete() {
               visible = true;
               updateVolume();
-
               button.classList.add("is-ringing");
               syncReducedMotionRinging();
             }
@@ -2561,15 +2448,14 @@
         const targets = label ? [button, label] : [button];
 
         gsap.killTweensOf(targets);
+
         button.inert = true;
 
         gsap.to(targets, {
           autoAlpha: 0,
-
           duration: motionPreference.matches
             ? 0
             : SETTINGS.pickup.phoneFade,
-
           ease: "power2.out",
           overwrite: true,
 
@@ -2582,19 +2468,12 @@
     };
   }
 
-  // Popup sequence:
-  // 1. Title and form
-  // 2. Loading animation during submission
-  // 3. Final title on success
-  // Failure returns to the form with entered values preserved.
-
   function createSteps(popup) {
     const items = Array.from(
       popup?.querySelectorAll(".genius-ambient-popup__step") || []
     );
 
     const [formStep, waveStep, finalStep] = items;
-
     const options = SETTINGS.steps;
     const wave = SETTINGS.wave;
 
@@ -2616,11 +2495,10 @@
     let ready = false;
     let phase = "idle";
     let result = null;
-
     let observer = null;
     let talk = null;
     let resultDelay = null;
-    let loadingAt = 0;
+    let loadingAt = null;
     let svgState = null;
 
     const hidden = {
@@ -2658,9 +2536,7 @@
     }
 
     function prepare(step) {
-      if (records.has(step)) {
-        return records.get(step);
-      }
+      if (records.has(step)) return records.get(step);
 
       const marked = Array.from(
         step.querySelectorAll("[data-step-title]")
@@ -2669,9 +2545,7 @@
       const titles = (
         marked.length
           ? marked
-          : Array.from(
-              step.querySelectorAll("h1,h2,h3,h4,h5,h6")
-            )
+          : Array.from(step.querySelectorAll("h1,h2,h3,h4,h5,h6"))
       ).filter(title => !title.closest(".w-form, form"));
 
       const splits = [];
@@ -2766,10 +2640,7 @@
           Math.min(...centers) - maximum / 2 - 8;
 
         const height =
-          Math.max(...centers) +
-          maximum / 2 +
-          8 -
-          top;
+          Math.max(...centers) + maximum / 2 + 8 - top;
 
         svg.setAttribute(
           "viewBox",
@@ -2808,7 +2679,12 @@
     }
 
     function startTalking() {
-      if (reduced || phase !== "loading") return;
+      if (
+        reduced ||
+        !["loading", "finishing"].includes(phase)
+      ) {
+        return;
+      }
 
       const {
         bars,
@@ -2819,11 +2695,11 @@
 
       if (!bars.length) return;
 
-      // Speech-like motion, not analysis of the ambient soundtrack.
+      // Speech-like motion, independent of the ambient soundtrack.
       let peak = 0.47;
 
       function beat() {
-        if (phase !== "loading") return;
+        if (!["loading", "finishing"].includes(phase)) return;
 
         const quiet = Math.random() < 0.14;
 
@@ -2831,40 +2707,29 @@
           ? randomBetween(0.03, 0.12)
           : randomBetween(0.78, 1);
 
-        peak +=
-          (randomBetween(0.38, 0.6) - peak) * 0.45;
+        peak += (randomBetween(0.38, 0.6) - peak) * 0.45;
 
         const spread = randomBetween(0.075, 0.115);
-
-        const duration = randomBetween(
-          wave.minBeat,
-          wave.maxBeat
-        );
+        const duration = randomBetween(wave.minBeat, wave.maxBeat);
 
         talk = gsap.timeline({
           onComplete: beat
         });
 
         bars.forEach((bar, i) => {
-          const position = bars.length > 1
-            ? i / (bars.length - 1)
-            : 0.5;
+          const position =
+            bars.length > 1 ? i / (bars.length - 1) : 0.5;
 
           const distance = (position - peak) / spread;
-
-          const shape = Math.exp(
-            -0.5 * distance * distance
-          );
+          const shape = Math.exp(-0.5 * distance * distance);
 
           const strength =
-            shape *
-            energy *
-            randomBetween(0.88, 1);
+            shape * energy * randomBetween(0.88, 1);
 
           const height =
-            heights[i] +
-            (maximum - heights[i]) * strength;
+            heights[i] + (maximum - heights[i]) * strength;
 
+          // Animate geometry only, so opacity can fade independently.
           talk.to(
             bar,
             {
@@ -2872,10 +2737,7 @@
                 height,
                 y: centers[i] - height / 2
               },
-
-              duration:
-                duration * randomBetween(0.8, 1.15),
-
+              duration: duration * randomBetween(0.8, 1.15),
               ease: "sine.inOut"
             },
             0
@@ -2930,73 +2792,57 @@
 
       phase = "finishing";
 
-      talk?.kill();
-      talk = null;
-
       const {
         bars,
         heights,
         centers
       } = prepareSvg();
 
-      gsap.killTweensOf(bars);
-
+      // Voice motion continues while the bars fade left to right.
       const timeline = gsap.timeline();
-
-      bars.forEach((bar, i) => {
-        timeline.to(
-          bar,
-          {
-            attr: {
-              height: heights[i],
-              y: centers[i] - heights[i] / 2
-            },
-
-            duration: reduced ? 0 : wave.settle,
-            ease: "sine.out"
-          },
-          0
-        );
-      });
 
       if (bars.length) {
         timeline.to(bars, {
           opacity: 0,
           duration: reduced ? 0.15 : wave.fadeOut,
-
           stagger: {
             each: reduced ? 0 : wave.barStagger,
             from: "start"
           },
-
           ease: "power2.inOut"
         });
       }
 
       timeline.call(() => {
+        // Stop and reset only once every bar is invisible.
+        talk?.kill();
+        talk = null;
+
+        bars.forEach((bar, i) => {
+          gsap.set(bar, {
+            opacity: 0,
+            attr: {
+              height: heights[i],
+              y: centers[i] - heights[i] / 2
+            }
+          });
+        });
+
         hide(waveStep);
         popup.removeAttribute("aria-busy");
-
-        formWrap.classList.remove(
-          "is-success-exiting"
-        );
+        formWrap.classList.remove("is-success-exiting");
       });
 
       if (succeeded) {
         observer?.disconnect();
-
-        form.removeEventListener(
-          "submit",
-          onSubmit,
-          true
-        );
+        form.removeEventListener("submit", onSubmit, true);
 
         timeline.call(() => {
           const record = records.get(formStep);
 
           record?.splits.forEach(split => split.revert());
-
           records.delete(formStep);
+
           phase = "complete";
         });
 
@@ -3023,6 +2869,7 @@
     function scheduleResult() {
       if (
         phase !== "loading" ||
+        loadingAt === null ||
         !result ||
         resultDelay
       ) {
@@ -3042,19 +2889,12 @@
     }
 
     function observeResult(mutations) {
-      if (
-        phase !== "submitting" &&
-        phase !== "loading"
-      ) {
-        return;
-      }
+      if (phase !== "submitting" && phase !== "loading") return;
 
-      // Only react to fresh Webflow result updates.
+      // Ignore a stale error from a previous attempt.
       const changed = element =>
         element &&
-        mutations.some(
-          mutation => mutation.target === element
-        );
+        mutations.some(mutation => mutation.target === element);
 
       if (
         changed(success) &&
@@ -3077,8 +2917,8 @@
       ready = false;
       result = null;
       phase = "submitting";
+      loadingAt = null;
 
-      // Keep layout space intact while form and title exit.
       formWrap.classList.add("is-success-exiting");
       popup.setAttribute("aria-busy", "true");
 
@@ -3098,7 +2938,6 @@
       bars.forEach((bar, i) => {
         gsap.set(bar, {
           opacity: 0,
-
           attr: {
             height: heights[i],
             y: centers[i] - heights[i] / 2
@@ -3108,79 +2947,60 @@
 
       const timeline = gsap.timeline();
 
-      // 1. Fade out the form first.
+      // Hide the form before the title exits.
       timeline.to(formTarget, {
         autoAlpha: 0,
-
-        duration: reduced
-          ? 0.15
-          : options.submitFormFade,
-
+        duration: reduced ? 0.15 : options.submitFormFade,
         ease: "power2.inOut"
       });
 
-      // 2. Let the title exit fully from left to right.
       if (record.chars.length) {
         timeline.to(
           record.chars,
           {
             ...hidden,
-
-            duration: reduced
-              ? 0.15
-              : options.submitExit,
-
+            duration: reduced ? 0.15 : options.submitExit,
             stagger: {
               each: reduced ? 0 : options.submitStagger,
               from: "start"
             },
-
             ease: "power2.inOut"
           },
           `+=${options.submitTitleDelay}`
         );
       }
 
-      // 3. Show the loading step.
       timeline.call(() => {
         hide(formStep);
         show(waveStep);
+
+        // Start motion immediately, before the staggered reveal.
+        phase = "loading";
+        startTalking();
       });
 
       if (bars.length) {
         timeline.to(bars, {
           opacity: 1,
           duration: reduced ? 0.15 : wave.fadeIn,
-
           stagger: {
             each: reduced ? 0 : wave.barStagger,
             from: "start"
           },
-
           ease: "power2.out"
         });
       }
 
-      // 4. Keep animating until the result and timing allow exit.
       timeline.call(() => {
-        phase = "loading";
+        // Preserve the full minimum loading time after the entrance.
         loadingAt = performance.now();
-
-        startTalking();
         scheduleResult();
       });
 
-      // Webflow submits in parallel with this animation.
-      // Do not preventDefault or replace its submission handler.
+      // Webflow continues handling the actual form submission.
     }
 
-    if (
-      form &&
-      success &&
-      failure &&
-      waveStep &&
-      finalStep
-    ) {
+    if (form && success && failure && waveStep && finalStep) {
       const display = getComputedStyle(form).display;
 
       formWrap.style.setProperty(
@@ -3188,9 +3008,7 @@
         display === "none" ? "block" : display
       );
 
-      formWrap.classList.add(
-        "reception-sequence-form"
-      );
+      formWrap.classList.add("reception-sequence-form");
 
       const style = document.createElement("style");
 
@@ -3214,19 +3032,11 @@
       for (const node of [success, failure]) {
         observer.observe(node, {
           attributes: true,
-          attributeFilter: [
-            "style",
-            "class",
-            "hidden"
-          ]
+          attributeFilter: ["style", "class", "hidden"]
         });
       }
 
-      form.addEventListener(
-        "submit",
-        onSubmit,
-        true
-      );
+      form.addEventListener("submit", onSubmit, true);
     }
 
     return {
@@ -3248,16 +3058,11 @@
     };
   }
 
-  // Main page sequence
-
   function setupPage() {
     if (window.__receptionSequenceInitialized) return;
 
     if (!window.gsap || !window.ScrollTrigger) {
-      console.warn(
-        "This sequence requires GSAP and ScrollTrigger."
-      );
-
+      console.warn("This sequence requires GSAP and ScrollTrigger.");
       return;
     }
 
@@ -3280,10 +3085,7 @@
     const popup = select(".genius-ambient-popup");
 
     const steps = createSteps(popup);
-
-    const backdrop = popup
-      ? document.createElement("div")
-      : null;
+    const backdrop = popup ? document.createElement("div") : null;
 
     if (backdrop) {
       backdrop.className = "genius-ambient-backdrop";
@@ -3320,11 +3122,7 @@
 
     const sound = createSoundManager(SETTINGS.sound);
     const phoneZone = createPhoneZone(SETTINGS.phone);
-
-    const trail = createTrail(
-      SETTINGS.trail,
-      phoneZone
-    );
+    const trail = createTrail(SETTINGS.trail, phoneZone);
 
     const random = createRandomNotifications(
       SETTINGS.random,
@@ -3359,14 +3157,8 @@
 
       gsap.to(backdrop, {
         autoAlpha: progress,
-
-        "--ambient-blur":
-          `${SETTINGS.backdrop.blur * progress}px`,
-
-        duration: reducedMotion
-          ? 0
-          : SETTINGS.backdrop.fade,
-
+        "--ambient-blur": `${SETTINGS.backdrop.blur * progress}px`,
+        duration: reducedMotion ? 0 : SETTINGS.backdrop.fade,
         ease: "power2.out",
         overwrite: true
       });
@@ -3390,9 +3182,7 @@
         pointerEvents: "auto"
       });
 
-      if (
-        getComputedStyle(cornerButton).position === "static"
-      ) {
+      if (getComputedStyle(cornerButton).position === "static") {
         cornerButton.style.position = "relative";
       }
 
@@ -3573,11 +3363,7 @@
         {
           autoAlpha: 1,
           "--ambient-blur": `${SETTINGS.backdrop.blur}px`,
-
-          duration: reducedMotion
-            ? 0
-            : SETTINGS.pickup.popupFade,
-
+          duration: reducedMotion ? 0 : SETTINGS.pickup.popupFade,
           ease: "power2.out",
           overwrite: true
         },
@@ -3588,11 +3374,7 @@
         popup,
         {
           autoAlpha: 1,
-
-          duration: reducedMotion
-            ? 0
-            : SETTINGS.pickup.popupFade,
-
+          duration: reducedMotion ? 0 : SETTINGS.pickup.popupFade,
           ease: "power2.out",
           overwrite: true,
 
@@ -3607,10 +3389,7 @@
         0
       );
 
-      const videoDelay = Math.max(
-        0,
-        SETTINGS.ambient.delay
-      );
+      const videoDelay = Math.max(0, SETTINGS.ambient.delay);
 
       transition.call(
         () => {
@@ -3634,11 +3413,7 @@
           videoWrap,
           {
             autoAlpha: 1,
-
-            duration: reducedMotion
-              ? 0
-              : SETTINGS.ambient.videoFade,
-
+            duration: reducedMotion ? 0 : SETTINGS.ambient.videoFade,
             ease: "power2.inOut",
             overwrite: true
           },
