@@ -115,7 +115,7 @@
       initialDelay: 0.3,
       startInterval: 1.2,
       endInterval: 0.08,
-      rampDuration: 5,
+      rampDuration: 12,
       acceleration: 1.5,
       timingVariation: 0.15,
       fadeDuration: 0.22,
