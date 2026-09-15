@@ -9,7 +9,7 @@
 
     soundButton: {
       slideDuration: 1,
-      slideEase: "power3.inOut",
+      slideEase: "power3.out",
       bottom: "1.5rem"
     },
 
@@ -852,7 +852,6 @@
 
       start(item) {
         const record = records.get(item);
-
         if (stopped || !record || record.started) return;
 
         record.started = true;
@@ -927,9 +926,7 @@
     function nextItem() {
       for (let i = 0; i < items.length; i++) {
         const item = items[nextIndex];
-
         nextIndex = (nextIndex + 1) % items.length;
-
         if (!retained.has(item)) return item;
       }
       return null;
@@ -1419,6 +1416,7 @@
 
       const maxOverlap = clamp(options.mobileMaxOverlap, 0, 0.5);
       const minVisible = clamp(options.mobileMinVisible, 0.2, 1);
+
       const slots = orderSlots(createSlots(target, width, height));
 
       const placed = [];
@@ -1617,8 +1615,8 @@
 
       const origin = phoneZone.getOrigin(list);
       const zone = phoneZone.getRect();
-      const paddingX = Math.min(options.edgePadding, width / 4);
 
+      const paddingX = Math.min(options.edgePadding, width / 4);
       const paddingY = Math.min(
         Math.max(options.edgePadding, entranceMove),
         height / 4
@@ -1932,7 +1930,7 @@
         layoutFrame !== null
       ) return;
 
-      // Never regenerate assigned positions on scroll or resize.
+      // Assigned positions do not regenerate on scroll or resize.
       layoutFrame = requestAnimationFrame(checkPhoneArea);
     }
 
@@ -2023,7 +2021,6 @@
     const events = new AbortController();
 
     if (label) gsap.set(label, { autoAlpha: 0 });
-
     gsap.set(button, { autoAlpha: 0 });
 
     button.inert = true;
@@ -2095,7 +2092,6 @@
         .trim();
 
       const value = parseFloat(raw);
-
       if (!Number.isFinite(value) || value <= 0) return 2.2;
 
       return raw.endsWith("ms") ? value / 1000 : value;
@@ -2341,6 +2337,7 @@
 
       const record = { step, splits, chars };
       records.set(step, record);
+
       return record;
     }
 
@@ -2514,7 +2511,6 @@
 
     function finishLoading() {
       resultDelay = null;
-
       if (phase !== "loading" || !result) return;
 
       const succeeded = result === "success";
@@ -2523,7 +2519,7 @@
       const { bars, heights, centers } = prepareSvg();
       const timeline = gsap.timeline();
 
-      // Keep speech motion active throughout the staggered fade.
+      // Speech keeps moving throughout the staggered opacity fade.
       if (bars.length) {
         timeline.to(bars, {
           opacity: 0,
@@ -2537,7 +2533,6 @@
       }
 
       timeline.call(() => {
-        // Stop and reset only after every bar is invisible.
         talk?.kill();
         talk = null;
 
@@ -2700,7 +2695,7 @@
         scheduleResult();
       });
 
-      // Webflow continues handling the actual submission.
+      // Webflow handles the actual form submission.
     }
 
     if (form && success && failure && waveStep && finalStep) {
@@ -2747,7 +2742,6 @@
         if (started || !items.length) return;
 
         started = true;
-
         if (document.fonts) await document.fonts.ready;
 
         revealForm(gsap.timeline({ delay: options.delay }));
@@ -2766,7 +2760,6 @@
     window.__receptionSequenceInitialized = true;
 
     gsap.registerPlugin(ScrollTrigger);
-
     if (window.SplitText) gsap.registerPlugin(SplitText);
 
     const overlay = select(".sound-wrap");
@@ -2792,6 +2785,10 @@
         "--ambient-blur": "0px"
       });
     }
+
+    const charms = Array.from(
+      document.querySelectorAll(".gloss-charm__spline")
+    );
 
     const videoWrap = popup?.querySelector(".video-wrap");
 
@@ -2861,7 +2858,7 @@
       popup.classList.remove("is-open");
     }
 
-    // The opening button replaces the separate corner control.
+    // The opening button becomes the persistent sound control.
     if (cornerButton && cornerButton !== mainButton) {
       cornerButton.inert = true;
       cornerButton.setAttribute("aria-hidden", "true");
@@ -2871,6 +2868,10 @@
     const soundIcon = mainButton?.querySelector(
       ".ri-volume-up-fill, .ri-volume-mute-fill"
     );
+
+    // Visible text changes only when this attribute is true.
+    const toggleSoundLabel =
+      mainButton?.getAttribute("data-sound-label-toggle") === "true";
 
     const soundLabels = [];
 
@@ -2933,11 +2934,13 @@
         mainButton.removeAttribute("aria-busy");
       }
 
-      for (const node of soundLabels) {
-        node.nodeValue = node.nodeValue.replace(
-          node.nodeValue.trim(),
-          action
-        );
+      if (toggleSoundLabel) {
+        for (const node of soundLabels) {
+          node.nodeValue = node.nodeValue.replace(
+            node.nodeValue.trim(),
+            action
+          );
+        }
       }
 
       if (soundIcon) {
@@ -2976,7 +2979,6 @@
 
       const before = mainButton.getBoundingClientRect();
 
-      // Ensure the viewport overlay is the positioning parent.
       if (mainButton.parentElement !== overlay) {
         overlay.appendChild(mainButton);
       }
@@ -2998,7 +3000,7 @@
 
       const after = mainButton.getBoundingClientRect();
 
-      // Start from its existing visual location without a jump.
+      // Preserve its visual starting position, then slide to the bottom.
       gsap.fromTo(
         mainButton,
         {
@@ -3036,7 +3038,7 @@
         webkitBackdropFilter: styles.webkitBackdropFilter
       });
 
-      // A separate background lets the button stay fully visible.
+      // Fade the background independently of the button.
       Object.assign(overlay.style, {
         position: "fixed",
         inset: "0",
@@ -3075,8 +3077,7 @@
         return;
       }
 
-      // The transparent overlay passes clicks through.
-      // The button retains pointer-events: auto.
+      // Pass clicks through the overlay, keeping its button interactive.
       overlay.style.pointerEvents = "none";
 
       gsap.to(overlayBackground, {
@@ -3096,7 +3097,6 @@
 
     function onSoundClick(event) {
       event.preventDefault();
-
       if (soundPending) return;
 
       if (!transitioning) {
@@ -3182,6 +3182,25 @@
           duration: reducedMotion ? 0 : SETTINGS.ambient.videoFade,
           ease: "power2.inOut",
           overwrite: true
+        }, videoDelay);
+      }
+
+      // Invert the charm alongside the video reveal.
+      if (charms.length) {
+        transition.to(charms, {
+          filter: (index, element) => {
+            const current = getComputedStyle(element).filter;
+
+            // Preserve any other filters already applied in Webflow.
+            const other = current && current !== "none"
+              ? current.replace(/invert\([^)]*\)/g, "").trim()
+              : "";
+
+            return (other ? other + " " : "") + "invert(100%)";
+          },
+          duration: reducedMotion ? 0 : SETTINGS.ambient.videoFade,
+          ease: "power2.inOut",
+          overwrite: "auto"
         }, videoDelay);
       }
 
