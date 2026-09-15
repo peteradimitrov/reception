@@ -125,7 +125,7 @@
       scatter: 0.7,
       mobileBreakpoint: 768,
       mobileGap: 12,
-      mobileVisibleTarget: 16,
+      mobileVisibleTarget: 24,
       mobileMaxOverlap: 0.22,
       mobileMinVisible: 0.55
     }
