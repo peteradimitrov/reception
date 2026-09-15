@@ -56,7 +56,7 @@
       minBeat: 0.16,
       maxBeat: 0.32,
       minimumLoading: 2.5,
-      resultHold: 0.8,
+      resultHold: 0.2,
       fadeOut: 0.35,
       finalDelay: 0.15
     },
