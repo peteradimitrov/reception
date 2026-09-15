@@ -55,7 +55,7 @@
       height: 64,
       minBeat: 0.16,
       maxBeat: 0.32,
-      minimumLoading: 1.5,
+      minimumLoading: 1.2,
       resultHold: 0.2,
       fadeOut: 0.35,
       finalDelay: 0.15
