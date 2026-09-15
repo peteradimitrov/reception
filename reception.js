@@ -6,7 +6,12 @@
 
   const SETTINGS = {
     overlayFade: 0.4,
-    cornerFade: 0.3,
+
+    soundButton: {
+      slideDuration: 1,
+      slideEase: "power3.inOut",
+      bottom: "1.5rem"
+    },
 
     pickup: {
       soundFade: 0.8,
@@ -38,7 +43,6 @@
       gap: 0.1,
       formDelay: 0.08,
       formFade: 0.35,
-
       submitFormFade: 0.3,
       submitTitleDelay: 0.08,
       submitExit: 0.6,
@@ -51,12 +55,8 @@
       height: 64,
       minBeat: 0.16,
       maxBeat: 0.32,
-
-      // Full loading time after the entrance finishes.
       minimumLoading: 2.5,
       resultHold: 0.8,
-
-      // Voice motion continues throughout this fade.
       fadeOut: 0.35,
       finalDelay: 0.15
     },
@@ -123,10 +123,9 @@
       moveUp: 16,
       edgePadding: 24,
       scatter: 0.7,
-
       mobileBreakpoint: 768,
       mobileGap: 12,
-      mobileVisibleTarget: 16,
+      mobileVisibleTarget: 9,
       mobileMaxOverlap: 0.22,
       mobileMinVisible: 0.55
     }
@@ -145,13 +144,11 @@
       const j = Math.floor(Math.random() * (i + 1));
       [array[i], array[j]] = [array[j], array[i]];
     }
-
     return array;
   }
 
   function readNumber(element, attribute, fallback, minimum = 0) {
     const raw = element?.getAttribute(attribute);
-
     if (raw == null || raw.trim() === "") return fallback;
 
     const value = Number(raw);
@@ -188,14 +185,12 @@
       if (!button) return null;
 
       const frame = gsap.ticker.frame;
-
       if (cachedFrame === frame) return cachedRect;
 
       cachedFrame = frame;
       cachedRect = null;
 
       const rect = button.getBoundingClientRect();
-
       if (!rect.width || !rect.height) return null;
 
       const radius = readNumber(
@@ -246,10 +241,7 @@
         rect.bottom > text.top - 12 &&
         rect.top < text.bottom + 12;
 
-      return (
-        Math.hypot(dx, dy) <= zone.clearance ||
-        !!touchesLabel
-      );
+      return Math.hypot(dx, dy) <= zone.clearance || !!touchesLabel;
     }
 
     function getOrigin(list) {
@@ -261,12 +253,7 @@
       };
     }
 
-    function blocksPlacement(
-      candidate,
-      origin,
-      zone,
-      moveDown = 0
-    ) {
+    function blocksPlacement(candidate, origin, zone, moveDown = 0) {
       return overlaps(
         {
           left: origin.x + candidate.x,
@@ -282,12 +269,7 @@
       );
     }
 
-    return {
-      getRect,
-      overlaps,
-      getOrigin,
-      blocksPlacement
-    };
+    return { getRect, overlaps, getOrigin, blocksPlacement };
   }
 
   function createSoundManager(options) {
@@ -336,7 +318,6 @@
                 `Audio request failed: ${response.status}`
               );
             }
-
             return response.arrayBuffer();
           })
           .catch(error => {
@@ -345,20 +326,16 @@
             return null;
           });
       }
-
       return asset.bytesPromise;
     }
 
     function decode(asset) {
-      if (asset.buffer) {
-        return Promise.resolve(asset.buffer);
-      }
+      if (asset.buffer) return Promise.resolve(asset.buffer);
 
       if (!asset.decodePromise) {
         asset.decodePromise = preload(asset)
           .then(bytes => {
             if (!bytes) return null;
-
             return context.decodeAudioData(bytes.slice(0));
           })
           .then(buffer => {
@@ -373,7 +350,6 @@
             asset.decodePromise = null;
           });
       }
-
       return asset.decodePromise;
     }
 
@@ -385,17 +361,13 @@
         !asset.buffer ||
         asset.source ||
         context?.state !== "running"
-      ) {
-        return;
-      }
+      ) return;
 
       const source = context.createBufferSource();
 
       source.buffer = asset.buffer;
       source.loop =
-        asset === assets.ambient
-          ? ambientSettings.loop
-          : true;
+        asset === assets.ambient ? ambientSettings.loop : true;
 
       source.connect(asset.output);
 
@@ -407,10 +379,7 @@
 
       if (fade > 0) {
         asset.output.gain.setValueAtTime(0, now);
-        asset.output.gain.linearRampToValueAtTime(
-          volume,
-          now + fade
-        );
+        asset.output.gain.linearRampToValueAtTime(volume, now + fade);
       } else {
         asset.output.gain.setValueAtTime(volume, now);
       }
@@ -419,10 +388,7 @@
 
       source.onended = () => {
         source.disconnect();
-
-        if (asset.source === source) {
-          asset.source = null;
-        }
+        if (asset.source === source) asset.source = null;
       };
 
       source.start(now);
@@ -433,20 +399,14 @@
 
       if (finished) {
         if (ambientSettings) {
-          startLoop(
-            assets.ambient,
-            ambientSettings.volumeFade
-          );
+          startLoop(assets.ambient, ambientSettings.volumeFade);
         }
-
         return;
       }
 
       startLoop(assets.street, options.streetFadeDuration);
 
-      if (typingRequested) {
-        startLoop(assets.typing);
-      }
+      if (typingRequested) startLoop(assets.typing);
     }
 
     function playRing() {
@@ -459,9 +419,7 @@
         asset.source ||
         context?.state !== "running" ||
         document.hidden
-      ) {
-        return;
-      }
+      ) return;
 
       const source = context.createBufferSource();
 
@@ -478,10 +436,7 @@
 
       source.onended = () => {
         source.disconnect();
-
-        if (asset.source === source) {
-          asset.source = null;
-        }
+        if (asset.source === source) asset.source = null;
       };
 
       source.start();
@@ -494,9 +449,7 @@
         !assets.ping.buffer ||
         context?.state !== "running" ||
         document.hidden
-      ) {
-        return;
-      }
+      ) return;
 
       const source = context.createBufferSource();
 
@@ -531,11 +484,9 @@
 
     function setBackgroundLevel(value, duration = 0.18) {
       const target = clamp(value, 0, 1);
-
       if (target === backgroundLevel) return;
 
       backgroundLevel = target;
-
       if (!context || !backgroundOutput) return;
 
       const gain = backgroundOutput.gain;
@@ -577,9 +528,7 @@
         asset.output = context.createGain();
 
         asset.output.gain.value =
-          asset === assets.street
-            ? 0
-            : clamp(asset.volume, 0, 1);
+          asset === assets.street ? 0 : clamp(asset.volume, 0, 1);
 
         asset.output.connect(
           asset === assets.ambient
@@ -591,9 +540,7 @@
       }
 
       context.addEventListener("statechange", () => {
-        if (context.state === "running") {
-          startRequestedLoops();
-        }
+        if (context.state === "running") startRequestedLoops();
       });
 
       return true;
@@ -603,9 +550,7 @@
       const currentAttempt = ++attemptId;
 
       try {
-        if (!ensureContext()) {
-          return Promise.resolve(false);
-        }
+        if (!ensureContext()) return Promise.resolve(false);
 
         const resumed = context.resume();
 
@@ -631,7 +576,6 @@
             enabled = success;
 
             if (enabled) startRequestedLoops();
-
             resolve(success);
           }
 
@@ -663,14 +607,8 @@
       }
 
       if (context && asset.output) {
-        asset.output.gain.cancelScheduledValues(
-          context.currentTime
-        );
-
-        asset.output.gain.setValueAtTime(
-          0,
-          context.currentTime
-        );
+        asset.output.gain.cancelScheduledValues(context.currentTime);
+        asset.output.gain.setValueAtTime(0, context.currentTime);
       }
     }
 
@@ -678,23 +616,16 @@
       clearTimeout(oldAudioTimer);
       oldAudioTimer = null;
 
-      for (const source of pingSources) {
-        source.stop();
-      }
+      for (const source of pingSources) source.stop();
 
       pingSources.clear();
 
-      [
-        assets.typing,
-        assets.street,
-        assets.ring
-      ].forEach(stopAsset);
+      [assets.typing, assets.street, assets.ring].forEach(stopAsset);
     }
 
     function disable() {
       attemptId++;
       enabled = false;
-
       stopOldAudio();
       stopAsset(assets.ambient);
     }
@@ -703,16 +634,12 @@
       if (finished) return;
 
       finished = true;
-
       if (!context) return;
 
       const now = context.currentTime;
 
       masterOutput.gain.cancelScheduledValues(now);
-      masterOutput.gain.setValueAtTime(
-        masterOutput.gain.value,
-        now
-      );
+      masterOutput.gain.setValueAtTime(masterOutput.gain.value, now);
 
       if (context.state !== "running" || duration <= 0) {
         masterOutput.gain.setValueAtTime(0, now);
@@ -720,10 +647,7 @@
         return;
       }
 
-      masterOutput.gain.linearRampToValueAtTime(
-        0,
-        now + duration
-      );
+      masterOutput.gain.linearRampToValueAtTime(0, now + duration);
 
       oldAudioTimer = window.setTimeout(
         stopOldAudio,
@@ -753,17 +677,11 @@
       playRing,
       disable,
       setBackgroundLevel,
-      isEnabled: () =>
-        enabled && context?.state === "running"
+      isEnabled: () => enabled && context?.state === "running"
     };
   }
 
-  function createBadgeCounters(
-    items,
-    options,
-    sound,
-    isAvailable
-  ) {
+  function createBadgeCounters(items, options, sound, isAvailable) {
     let stopped = false;
     let timer = null;
     let bag = [];
@@ -775,34 +693,22 @@
     ).matches;
 
     const minInterval = Math.max(0.05, options.minInterval);
-    const maxInterval = Math.max(
-      minInterval,
-      options.maxInterval
-    );
+    const maxInterval = Math.max(minInterval, options.maxInterval);
 
     for (const item of items) {
       if (
         !item.classList.contains("notification-type") ||
         item.getAttribute("data-notification-count") !== "true"
-      ) {
-        continue;
-      }
+      ) continue;
 
-      const badge = item.querySelector(
-        ".notification-type__badge"
-      );
-
+      const badge = item.querySelector(".notification-type__badge");
       if (!badge) continue;
 
       const raw = badge.textContent.trim();
-
       if (!/^\d+$/.test(raw)) continue;
 
       const target = Number(raw);
-
-      if (!Number.isSafeInteger(target) || target < 0) {
-        continue;
-      }
+      if (!Number.isSafeInteger(target) || target < 0) continue;
 
       const walker = document.createTreeWalker(
         badge,
@@ -849,15 +755,12 @@
 
       gsap.set(badge, {
         autoAlpha: 0,
-        y:
-          originalY +
-          (reducedMotion ? 0 : options.badgeMoveDown)
+        y: originalY + (reducedMotion ? 0 : options.badgeMoveDown)
       });
     }
 
     function reveal(record) {
       if (record.revealed) return;
-
       record.revealed = true;
 
       gsap.to(record.badge, {
@@ -874,9 +777,7 @@
         !record.started ||
         record.current >= record.target ||
         !isAvailable(record.item)
-      ) {
-        return false;
-      }
+      ) return false;
 
       const rect = record.item.getBoundingClientRect();
 
@@ -892,9 +793,7 @@
 
     function hasPending() {
       return [...records.values()].some(
-        record =>
-          record.started &&
-          record.current < record.target
+        record => record.started && record.current < record.target
       );
     }
 
@@ -904,9 +803,7 @@
         document.hidden ||
         timer !== null ||
         !hasPending()
-      ) {
-        return;
-      }
+      ) return;
 
       timer = window.setTimeout(
         tick,
@@ -916,7 +813,6 @@
 
     function tick() {
       timer = null;
-
       if (stopped) return;
 
       if (document.hidden) {
@@ -929,9 +825,7 @@
 
       bag = bag.filter(record => eligibleSet.has(record));
 
-      if (!bag.length) {
-        bag = shuffle([...eligible]);
-      }
+      if (!bag.length) bag = shuffle([...eligible]);
 
       const record = bag.pop();
 
@@ -948,7 +842,6 @@
     document.addEventListener("visibilitychange", () => {
       clearTimeout(timer);
       timer = null;
-
       if (!document.hidden) schedule();
     });
 
@@ -979,17 +872,13 @@
     const wrapper = select("[data-trail-wrapper]");
     const list = wrapper?.querySelector("[data-trail-list]");
 
-    if (!wrapper || !list) {
-      return { start() {} };
-    }
+    if (!wrapper || !list) return { start() {} };
 
     const items = shuffle(
       Array.from(list.querySelectorAll("[data-trail-item]"))
     );
 
-    if (!items.length) {
-      return { start() {} };
-    }
+    if (!items.length) return { start() {} };
 
     const useScale =
       wrapper.getAttribute("data-trail-scale") === "true";
@@ -1010,9 +899,7 @@
       0
     );
 
-    const stayEvery = Number.isInteger(stayValue)
-      ? stayValue
-      : 0;
+    const stayEvery = Number.isInteger(stayValue) ? stayValue : 0;
 
     let unlocked = false;
     let active = false;
@@ -1045,7 +932,6 @@
 
         if (!retained.has(item)) return item;
       }
-
       return null;
     }
 
@@ -1067,16 +953,10 @@
 
     function clearPhoneArea() {
       const zone = phoneZone.getRect();
-
       if (!zone) return;
 
       for (const item of [...visibleItems]) {
-        if (
-          phoneZone.overlaps(
-            item.getBoundingClientRect(),
-            zone
-          )
-        ) {
+        if (phoneZone.overlaps(item.getBoundingClientRect(), zone)) {
           hideImmediately(item);
         }
       }
@@ -1086,7 +966,6 @@
       if (!item || retained.has(item)) return;
 
       timestamps.delete(item);
-
       activeItems = activeItems.filter(value => value !== item);
 
       if (!useFall) {
@@ -1101,7 +980,6 @@
             visibleItems.delete(item);
           }
         });
-
         return;
       }
 
@@ -1113,8 +991,7 @@
       });
 
       const clearance =
-        Math.hypot(item.offsetWidth, item.offsetHeight) / 2 +
-        24;
+        Math.hypot(item.offsetWidth, item.offsetHeight) / 2 + 24;
 
       const distance = Math.max(
         40,
@@ -1138,9 +1015,7 @@
         overwrite: "auto",
 
         onUpdate() {
-          if (
-            phoneZone.overlaps(item.getBoundingClientRect())
-          ) {
+          if (phoneZone.overlaps(item.getBoundingClientRect())) {
             hideImmediately(item);
           }
         },
@@ -1172,18 +1047,12 @@
           phoneZone.getOrigin(list),
           phoneZone.getRect()
         )
-      ) {
-        return false;
-      }
+      ) return false;
 
       gsap.killTweensOf(item);
 
       if (useFall) {
-        gsap.set(item, {
-          x: 0,
-          y: 0,
-          rotation: 0
-        });
+        gsap.set(item, { x: 0, y: 0, rotation: 0 });
       }
 
       gsap.set(item, {
@@ -1193,13 +1062,11 @@
       });
 
       timestamps.delete(item);
-
       activeItems = activeItems.filter(value => value !== item);
       visibleItems.add(item);
 
       const shouldStay =
-        stayEvery > 0 &&
-        (globalIndex + 1) % stayEvery === 0;
+        stayEvery > 0 && (globalIndex + 1) % stayEvery === 0;
 
       if (shouldStay) {
         retained.add(item);
@@ -1249,7 +1116,6 @@
       last = { x, y };
 
       const item = nextItem();
-
       if (!item) return;
 
       if (activate(item, x, y)) globalIndex++;
@@ -1308,9 +1174,7 @@
         const now = Date.now();
 
         for (const [item, timestamp] of timestamps) {
-          if (now - timestamp > options.stopDuration) {
-            exitItem(item);
-          }
+          if (now - timestamp > options.stopDuration) exitItem(item);
         }
       }, 100);
     }
@@ -1334,7 +1198,6 @@
     return {
       start() {
         if (unlocked) return;
-
         unlocked = true;
         sync();
       },
@@ -1399,14 +1262,10 @@
 
     wrapper.style.overflow = "clip";
 
-    gsap.set(items, {
-      autoAlpha: 0,
-      y: 0
-    });
+    gsap.set(items, { autoAlpha: 0, y: 0 });
 
     function schedulePopup(seconds) {
       popupTimer = gsap.delayedCall(seconds, showNext);
-
       if (document.hidden) popupTimer.pause();
     }
 
@@ -1476,7 +1335,6 @@
         )[0];
 
         result.push(first);
-
         if (!remaining.length) break;
 
         let bestIndex = 0;
@@ -1561,7 +1419,6 @@
 
       const maxOverlap = clamp(options.mobileMaxOverlap, 0, 0.5);
       const minVisible = clamp(options.mobileMinVisible, 0.2, 1);
-
       const slots = orderSlots(createSlots(target, width, height));
 
       const placed = [];
@@ -1632,18 +1489,14 @@
               zone,
               entranceMove
             )
-          ) {
-            return;
-          }
+          ) return;
 
           const overlap = getOverlap(candidate, placed);
 
           if (
             overlap.maximum > maxOverlap ||
             overlap.total > maxOverlap * 1.5
-          ) {
-            return;
-          }
+          ) return;
 
           const expanded = {
             x: x - gap / 2,
@@ -1675,13 +1528,11 @@
           const local = attempt < 60;
 
           const x = local
-            ? centerX +
-              randomBetween(-0.5, 0.5) * slot.width * width
+            ? centerX + randomBetween(-0.5, 0.5) * slot.width * width
             : randomBetween(0, width);
 
           const y = local
-            ? centerY +
-              randomBetween(-0.5, 0.5) * slot.height * height
+            ? centerY + randomBetween(-0.5, 0.5) * slot.height * height
             : randomBetween(0, height);
 
           consider(x - size.width / 2, y - size.height / 2);
@@ -1740,11 +1591,8 @@
           ...size
         };
 
-        if (i % 2) {
-          leftEdge = x;
-        } else {
-          rightEdge = x + size.width;
-        }
+        if (i % 2) leftEdge = x;
+        else rightEdge = x + size.width;
 
         save(item, candidate);
       });
@@ -1753,8 +1601,7 @@
 
       items.sort(
         (a, b) =>
-          Number(visibleSet.has(b)) -
-          Number(visibleSet.has(a))
+          Number(visibleSet.has(b)) - Number(visibleSet.has(a))
       );
 
       items.forEach((item, i) => {
@@ -1770,7 +1617,6 @@
 
       const origin = phoneZone.getOrigin(list);
       const zone = phoneZone.getRect();
-
       const paddingX = Math.min(options.edgePadding, width / 4);
 
       const paddingY = Math.min(
@@ -1839,10 +1685,8 @@
           const minY = Math.min(paddingY, availableY / 2);
           const maxX = availableX - minX;
           const maxY = availableY - minY;
-
           const centerX = paddingX + slot.x * usableWidth;
           const centerY = paddingY + slot.y * usableHeight;
-
           const jitterX = slot.width * usableWidth * scatter;
           const jitterY = slot.height * usableHeight * scatter;
 
@@ -1861,17 +1705,13 @@
                 zone,
                 entranceMove
               )
-            ) {
-              return;
-            }
+            ) return;
 
             const overlap = getOverlap(candidate, placements);
 
             const slotDistance = Math.hypot(
-              (candidate.x + size.width / 2 - centerX) /
-                usableWidth,
-              (candidate.y + size.height / 2 - centerY) /
-                usableHeight
+              (candidate.x + size.width / 2 - centerX) / usableWidth,
+              (candidate.y + size.height / 2 - centerY) / usableHeight
             );
 
             const score =
@@ -1946,10 +1786,7 @@
         return;
       }
 
-      gsap.set(item, {
-        autoAlpha: 0,
-        y: entranceMove
-      });
+      gsap.set(item, { autoAlpha: 0, y: entranceMove });
 
       const animation = gsap.timeline({
         onComplete() {
@@ -1960,24 +1797,16 @@
       entrances.set(item, animation);
 
       animation
-        .to(
-          item,
-          {
-            autoAlpha: 1,
-            duration: options.fadeDuration,
-            ease: "power2.out"
-          },
-          0
-        )
-        .to(
-          item,
-          {
-            y: 0,
-            duration: options.moveDuration,
-            ease: "power3.out"
-          },
-          0
-        );
+        .to(item, {
+          autoAlpha: 1,
+          duration: options.fadeDuration,
+          ease: "power2.out"
+        }, 0)
+        .to(item, {
+          y: 0,
+          duration: options.moveDuration,
+          ease: "power3.out"
+        }, 0);
     }
 
     function nextDelay() {
@@ -1996,7 +1825,6 @@
 
       const start = Math.max(0.05, options.startInterval);
       const end = clamp(options.endInterval, 0.05, start);
-
       const base = start * Math.pow(end / start, curve);
       const variation = clamp(options.timingVariation, 0, 0.5);
 
@@ -2009,11 +1837,9 @@
     function showNext() {
       if (!started || index >= items.length) return;
 
-      if (!layoutReady) {
-        if (!buildLayout()) {
-          schedulePopup(0.25);
-          return;
-        }
+      if (!layoutReady && !buildLayout()) {
+        schedulePopup(0.25);
+        return;
       }
 
       while (
@@ -2024,10 +1850,7 @@
       }
 
       if (index >= items.length) return;
-
-      if (startedAt === null) {
-        startedAt = performance.now();
-      }
+      if (startedAt === null) startedAt = performance.now();
 
       const item = items[index];
       const candidate = placementsByItem.get(item);
@@ -2058,14 +1881,11 @@
       counters.start(item);
       index++;
 
-      if (index < items.length) {
-        schedulePopup(nextDelay());
-      }
+      if (index < items.length) schedulePopup(nextDelay());
     }
 
     function checkPhoneArea() {
       layoutFrame = null;
-
       if (!started || stopped) return;
 
       const zone = phoneZone.getRect();
@@ -2073,7 +1893,6 @@
 
       for (const item of shown) {
         const saved = placementsByItem.get(item);
-
         if (!saved) continue;
 
         const collision = phoneZone.blocksPlacement(
@@ -2089,11 +1908,8 @@
 
         if (collision === blocked.has(item)) continue;
 
-        if (collision) {
-          blocked.add(item);
-        } else {
-          blocked.delete(item);
-        }
+        if (collision) blocked.add(item);
+        else blocked.delete(item);
 
         entrances.get(item)?.kill();
         entrances.delete(item);
@@ -2114,11 +1930,9 @@
         stopped ||
         document.hidden ||
         layoutFrame !== null
-      ) {
-        return;
-      }
+      ) return;
 
-      // Assigned positions remain stable on resize and scroll.
+      // Never regenerate assigned positions on scroll or resize.
       layoutFrame = requestAnimationFrame(checkPhoneArea);
     }
 
@@ -2133,19 +1947,16 @@
 
     if (window.ResizeObserver) {
       observer = new ResizeObserver(scheduleSafetyCheck);
-
       observer.observe(list);
       items.forEach(item => observer.observe(item));
 
       const phone = select(".phone-btn");
-
       if (phone) observer.observe(phone);
     }
 
     return {
       start() {
         if (started || stopped) return;
-
         started = true;
         schedulePopup(options.initialDelay);
       },
@@ -2172,7 +1983,6 @@
 
   function createPhone(options, sound, onProximity) {
     const button = select(".phone-btn");
-
     if (!button) return { start() {} };
 
     const label =
@@ -2222,7 +2032,6 @@
 
     function updateVolume() {
       frame = null;
-
       if (!visible) return;
 
       const rect = button.getBoundingClientRect();
@@ -2237,16 +2046,8 @@
 
       const distance = pointer
         ? Math.hypot(
-            Math.max(
-              rect.left - pointer.x,
-              0,
-              pointer.x - rect.right
-            ),
-            Math.max(
-              rect.top - pointer.y,
-              0,
-              pointer.y - rect.bottom
-            )
+            Math.max(rect.left - pointer.x, 0, pointer.x - rect.right),
+            Math.max(rect.top - pointer.y, 0, pointer.y - rect.bottom)
           )
         : Infinity;
 
@@ -2275,9 +2076,7 @@
         event.target !== button ||
         event.animationName !== "phone-halo" ||
         event.pseudoElement !== "::before"
-      ) {
-        return;
-      }
+      ) return;
 
       sound.playRing();
     }
@@ -2328,42 +2127,26 @@
       { signal: events.signal }
     );
 
-    window.addEventListener(
-      "pointermove",
-      event => {
-        if (event.pointerType === "touch") return;
+    window.addEventListener("pointermove", event => {
+      if (event.pointerType === "touch") return;
 
-        pointer = {
-          x: event.clientX,
-          y: event.clientY
-        };
+      pointer = { x: event.clientX, y: event.clientY };
+      scheduleUpdate();
+    }, {
+      passive: true,
+      signal: events.signal
+    });
 
-        scheduleUpdate();
-      },
-      {
-        passive: true,
-        signal: events.signal
-      }
-    );
+    document.documentElement.addEventListener("pointerleave", () => {
+      pointer = null;
+      scheduleUpdate();
+    }, { signal: events.signal });
 
-    document.documentElement.addEventListener(
-      "pointerleave",
-      () => {
-        pointer = null;
-        scheduleUpdate();
-      },
-      { signal: events.signal }
-    );
-
-    window.addEventListener(
-      "blur",
-      () => {
-        pointer = null;
-        focused = false;
-        scheduleUpdate();
-      },
-      { signal: events.signal }
-    );
+    window.addEventListener("blur", () => {
+      pointer = null;
+      focused = false;
+      scheduleUpdate();
+    }, { signal: events.signal });
 
     window.addEventListener("resize", scheduleUpdate, {
       passive: true,
@@ -2376,30 +2159,20 @@
       signal: events.signal
     });
 
-    button.addEventListener(
-      "focusin",
-      () => {
-        focused = true;
-        scheduleUpdate();
-      },
-      { signal: events.signal }
-    );
+    button.addEventListener("focusin", () => {
+      focused = true;
+      scheduleUpdate();
+    }, { signal: events.signal });
 
-    button.addEventListener(
-      "focusout",
-      event => {
-        if (button.contains(event.relatedTarget)) return;
-
-        focused = false;
-        scheduleUpdate();
-      },
-      { signal: events.signal }
-    );
+    button.addEventListener("focusout", event => {
+      if (button.contains(event.relatedTarget)) return;
+      focused = false;
+      scheduleUpdate();
+    }, { signal: events.signal });
 
     return {
       start() {
         if (started) return;
-
         started = true;
 
         revealTimer = gsap.delayedCall(delay, () => {
@@ -2448,7 +2221,6 @@
         const targets = label ? [button, label] : [button];
 
         gsap.killTweensOf(targets);
-
         button.inert = true;
 
         gsap.to(targets, {
@@ -2487,9 +2259,7 @@
     const form = formWrap?.querySelector("form");
     const success = formWrap?.querySelector(".w-form-done");
     const failure = formWrap?.querySelector(".w-form-fail");
-
-    const formTarget =
-      formWrap || formStep?.querySelector("form");
+    const formTarget = formWrap || formStep?.querySelector("form");
 
     let started = false;
     let ready = false;
@@ -2516,7 +2286,6 @@
       step.inert = false;
       step.removeAttribute("aria-hidden");
       step.classList.add("is-active");
-
       gsap.set(step, { autoAlpha: 1 });
     }
 
@@ -2524,7 +2293,6 @@
       step.inert = true;
       step.setAttribute("aria-hidden", "true");
       step.classList.remove("is-active");
-
       gsap.set(step, { autoAlpha: 0 });
     }
 
@@ -2571,12 +2339,7 @@
         transformOrigin: "50% 60%"
       });
 
-      const record = {
-        step,
-        splits,
-        chars
-      };
-
+      const record = { step, splits, chars };
       records.set(step, record);
       return record;
     }
@@ -2627,20 +2390,15 @@
 
       const centers = bars.map(
         (bar, i) =>
-          Number(bar.getAttribute("y") || 0) +
-          heights[i] / 2
+          Number(bar.getAttribute("y") || 0) + heights[i] / 2
       );
 
       const maximum = Math.max(wave.height, ...heights);
 
       if (svg && bars.length) {
         const box = svg.viewBox.baseVal;
-
-        const top =
-          Math.min(...centers) - maximum / 2 - 8;
-
-        const height =
-          Math.max(...centers) + maximum / 2 + 8 - top;
+        const top = Math.min(...centers) - maximum / 2 - 8;
+        const height = Math.max(...centers) + maximum / 2 + 8 - top;
 
         svg.setAttribute(
           "viewBox",
@@ -2668,13 +2426,7 @@
 
       waveStep.setAttribute("role", "status");
 
-      svgState = {
-        bars,
-        heights,
-        centers,
-        maximum
-      };
-
+      svgState = { bars, heights, centers, maximum };
       return svgState;
     }
 
@@ -2682,17 +2434,9 @@
       if (
         reduced ||
         !["loading", "finishing"].includes(phase)
-      ) {
-        return;
-      }
+      ) return;
 
-      const {
-        bars,
-        heights,
-        centers,
-        maximum
-      } = prepareSvg();
-
+      const { bars, heights, centers, maximum } = prepareSvg();
       if (!bars.length) return;
 
       // Speech-like motion, independent of the ambient soundtrack.
@@ -2712,9 +2456,7 @@
         const spread = randomBetween(0.075, 0.115);
         const duration = randomBetween(wave.minBeat, wave.maxBeat);
 
-        talk = gsap.timeline({
-          onComplete: beat
-        });
+        talk = gsap.timeline({ onComplete: beat });
 
         bars.forEach((bar, i) => {
           const position =
@@ -2722,26 +2464,19 @@
 
           const distance = (position - peak) / spread;
           const shape = Math.exp(-0.5 * distance * distance);
-
-          const strength =
-            shape * energy * randomBetween(0.88, 1);
+          const strength = shape * energy * randomBetween(0.88, 1);
 
           const height =
             heights[i] + (maximum - heights[i]) * strength;
 
-          // Animate geometry only, so opacity can fade independently.
-          talk.to(
-            bar,
-            {
-              attr: {
-                height,
-                y: centers[i] - height / 2
-              },
-              duration: duration * randomBetween(0.8, 1.15),
-              ease: "sine.inOut"
+          talk.to(bar, {
+            attr: {
+              height,
+              y: centers[i] - height / 2
             },
-            0
-          );
+            duration: duration * randomBetween(0.8, 1.15),
+            ease: "sine.inOut"
+          }, 0);
         });
       }
 
@@ -2750,37 +2485,31 @@
 
     function revealForm(timeline, retry = false) {
       enter(timeline, prepare(formStep));
-
       if (!formTarget) return;
 
-      timeline.to(
-        formTarget,
-        {
-          autoAlpha: 1,
-          duration: reduced ? 0.2 : options.formFade,
-          ease: "power2.out",
+      timeline.to(formTarget, {
+        autoAlpha: 1,
+        duration: reduced ? 0.2 : options.formFade,
+        ease: "power2.out",
 
-          onComplete() {
-            formTarget.inert = false;
-            ready = true;
-            phase = "idle";
+        onComplete() {
+          formTarget.inert = false;
+          ready = true;
+          phase = "idle";
 
-            if (retry) {
-              const target =
-                failure &&
-                getComputedStyle(failure).display !== "none"
-                  ? failure
-                  : form;
+          if (retry) {
+            const target =
+              failure && getComputedStyle(failure).display !== "none"
+                ? failure
+                : form;
 
-              if (target) {
-                target.setAttribute("tabindex", "-1");
-                target.focus({ preventScroll: true });
-              }
+            if (target) {
+              target.setAttribute("tabindex", "-1");
+              target.focus({ preventScroll: true });
             }
           }
-        },
-        `+=${options.formDelay}`
-      );
+        }
+      }, `+=${options.formDelay}`);
     }
 
     function finishLoading() {
@@ -2789,18 +2518,12 @@
       if (phase !== "loading" || !result) return;
 
       const succeeded = result === "success";
-
       phase = "finishing";
 
-      const {
-        bars,
-        heights,
-        centers
-      } = prepareSvg();
-
-      // Voice motion continues while the bars fade left to right.
+      const { bars, heights, centers } = prepareSvg();
       const timeline = gsap.timeline();
 
+      // Keep speech motion active throughout the staggered fade.
       if (bars.length) {
         timeline.to(bars, {
           opacity: 0,
@@ -2814,7 +2537,7 @@
       }
 
       timeline.call(() => {
-        // Stop and reset only once every bar is invisible.
+        // Stop and reset only after every bar is invisible.
         talk?.kill();
         talk = null;
 
@@ -2842,14 +2565,10 @@
 
           record?.splits.forEach(split => split.revert());
           records.delete(formStep);
-
           phase = "complete";
         });
 
-        timeline.to({}, {
-          duration: wave.finalDelay
-        });
-
+        timeline.to({}, { duration: wave.finalDelay });
         enter(timeline, prepare(finalStep));
 
         timeline.call(() => {
@@ -2872,9 +2591,7 @@
         loadingAt === null ||
         !result ||
         resultDelay
-      ) {
-        return;
-      }
+      ) return;
 
       const remaining = Math.max(
         0,
@@ -2891,7 +2608,6 @@
     function observeResult(mutations) {
       if (phase !== "submitting" && phase !== "loading") return;
 
-      // Ignore a stale error from a previous attempt.
       const changed = element =>
         element &&
         mutations.some(mutation => mutation.target === element);
@@ -2928,12 +2644,7 @@
       formTarget.inert = true;
 
       const record = prepare(formStep);
-
-      const {
-        bars,
-        heights,
-        centers
-      } = prepareSvg();
+      const { bars, heights, centers } = prepareSvg();
 
       bars.forEach((bar, i) => {
         gsap.set(bar, {
@@ -2947,7 +2658,6 @@
 
       const timeline = gsap.timeline();
 
-      // Hide the form before the title exits.
       timeline.to(formTarget, {
         autoAlpha: 0,
         duration: reduced ? 0.15 : options.submitFormFade,
@@ -2955,26 +2665,20 @@
       });
 
       if (record.chars.length) {
-        timeline.to(
-          record.chars,
-          {
-            ...hidden,
-            duration: reduced ? 0.15 : options.submitExit,
-            stagger: {
-              each: reduced ? 0 : options.submitStagger,
-              from: "start"
-            },
-            ease: "power2.inOut"
+        timeline.to(record.chars, {
+          ...hidden,
+          duration: reduced ? 0.15 : options.submitExit,
+          stagger: {
+            each: reduced ? 0 : options.submitStagger,
+            from: "start"
           },
-          `+=${options.submitTitleDelay}`
-        );
+          ease: "power2.inOut"
+        }, `+=${options.submitTitleDelay}`);
       }
 
       timeline.call(() => {
         hide(formStep);
         show(waveStep);
-
-        // Start motion immediately, before the staggered reveal.
         phase = "loading";
         startTalking();
       });
@@ -2992,12 +2696,11 @@
       }
 
       timeline.call(() => {
-        // Preserve the full minimum loading time after the entrance.
         loadingAt = performance.now();
         scheduleResult();
       });
 
-      // Webflow continues handling the actual form submission.
+      // Webflow continues handling the actual submission.
     }
 
     if (form && success && failure && waveStep && finalStep) {
@@ -3045,15 +2748,9 @@
 
         started = true;
 
-        if (document.fonts) {
-          await document.fonts.ready;
-        }
+        if (document.fonts) await document.fonts.ready;
 
-        revealForm(
-          gsap.timeline({
-            delay: options.delay
-          })
-        );
+        revealForm(gsap.timeline({ delay: options.delay }));
       }
     };
   }
@@ -3070,9 +2767,7 @@
 
     gsap.registerPlugin(ScrollTrigger);
 
-    if (window.SplitText) {
-      gsap.registerPlugin(SplitText);
-    }
+    if (window.SplitText) gsap.registerPlugin(SplitText);
 
     const overlay = select(".sound-wrap");
 
@@ -3090,7 +2785,6 @@
     if (backdrop) {
       backdrop.className = "genius-ambient-backdrop";
       backdrop.setAttribute("aria-hidden", "true");
-
       popup.before(backdrop);
 
       gsap.set(backdrop, {
@@ -3105,9 +2799,7 @@
       ? videoWrap
       : videoWrap?.querySelector("video");
 
-    if (videoWrap) {
-      gsap.set(videoWrap, { autoAlpha: 0 });
-    }
+    if (videoWrap) gsap.set(videoWrap, { autoAlpha: 0 });
 
     if (video) {
       video.muted = true;
@@ -3140,7 +2832,7 @@
     let experienceStarted = false;
     let soundPending = false;
     let timeout = null;
-    let cornerShown = false;
+    let overlayBackground = null;
     let pickedUp = false;
     let backdropProgress = 0;
 
@@ -3149,9 +2841,7 @@
         !backdrop ||
         pickedUp ||
         Math.abs(progress - backdropProgress) < 0.001
-      ) {
-        return;
-      }
+      ) return;
 
       backdropProgress = progress;
 
@@ -3166,87 +2856,106 @@
 
     if (popup) {
       gsap.set(popup, { autoAlpha: 0 });
-
       popup.inert = true;
       popup.setAttribute("aria-hidden", "true");
       popup.classList.remove("is-open");
     }
 
-    const cornerIcon = cornerButton?.querySelector(
+    // The opening button replaces the separate corner control.
+    if (cornerButton && cornerButton !== mainButton) {
+      cornerButton.inert = true;
+      cornerButton.setAttribute("aria-hidden", "true");
+      cornerButton.style.display = "none";
+    }
+
+    const soundIcon = mainButton?.querySelector(
       ".ri-volume-up-fill, .ri-volume-mute-fill"
     );
 
-    if (cornerButton) {
-      Object.assign(cornerButton.style, {
-        zIndex: "10002",
-        pointerEvents: "auto"
-      });
+    const soundLabels = [];
 
-      if (getComputedStyle(cornerButton).position === "static") {
-        cornerButton.style.position = "relative";
+    if (mainButton) {
+      const walker = document.createTreeWalker(
+        mainButton,
+        NodeFilter.SHOW_TEXT
+      );
+
+      let node;
+
+      while ((node = walker.nextNode())) {
+        if (
+          /^(enable sounds?|sound on|unmute|mute sounds?)$/i.test(
+            node.nodeValue.trim()
+          )
+        ) {
+          soundLabels.push(node);
+        }
       }
 
-      gsap.set(cornerButton, { autoAlpha: 0 });
+      mainButton.inert = false;
+      mainButton.removeAttribute("aria-hidden");
+      mainButton.style.pointerEvents = "auto";
+      mainButton.style.zIndex = "1";
 
-      cornerButton.disabled = true;
-      cornerButton.setAttribute("aria-hidden", "true");
+      if (mainButton.matches("button")) {
+        mainButton.type = "button";
+      }
+
+      if (!mainButton.matches("button, a[href], input")) {
+        mainButton.setAttribute("role", "button");
+        mainButton.setAttribute("tabindex", "0");
+
+        mainButton.addEventListener("keydown", event => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            mainButton.click();
+          }
+        });
+      }
+
+      gsap.set(mainButton, { autoAlpha: 1 });
     }
 
-    function updateCornerButton() {
-      if (!cornerButton) return;
+    function updateSoundButton() {
+      if (!mainButton) return;
 
       const enabled = sound.isEnabled();
       const action = enabled ? "Mute sound" : "Enable sound";
 
-      cornerButton.disabled = soundPending;
-      cornerButton.setAttribute("aria-label", action);
-      cornerButton.setAttribute("title", action);
+      mainButton.disabled = soundPending;
+      mainButton.setAttribute("aria-disabled", String(soundPending));
+      mainButton.setAttribute("aria-label", action);
+      mainButton.setAttribute("title", action);
 
       if (soundPending) {
-        cornerButton.setAttribute("aria-busy", "true");
+        mainButton.setAttribute("aria-busy", "true");
       } else {
-        cornerButton.removeAttribute("aria-busy");
+        mainButton.removeAttribute("aria-busy");
       }
 
-      if (cornerIcon) {
-        cornerIcon.classList.toggle(
-          "ri-volume-mute-fill",
-          enabled
+      for (const node of soundLabels) {
+        node.nodeValue = node.nodeValue.replace(
+          node.nodeValue.trim(),
+          action
         );
-
-        cornerIcon.classList.toggle(
-          "ri-volume-up-fill",
-          !enabled
-        );
-
-        cornerIcon.setAttribute("aria-hidden", "true");
       }
 
-      if (!experienceStarted) return;
-
-      cornerButton.removeAttribute("aria-hidden");
-
-      if (cornerShown) return;
-
-      cornerShown = true;
-
-      gsap.to(cornerButton, {
-        autoAlpha: 1,
-        duration: reducedMotion ? 0 : SETTINGS.cornerFade,
-        ease: "power2.out",
-        overwrite: true
-      });
+      if (soundIcon) {
+        soundIcon.classList.toggle("ri-volume-mute-fill", enabled);
+        soundIcon.classList.toggle("ri-volume-up-fill", !enabled);
+        soundIcon.setAttribute("aria-hidden", "true");
+      }
     }
 
     function requestSound() {
       if (soundPending || sound.isEnabled()) return;
 
       soundPending = true;
-      updateCornerButton();
+      updateSoundButton();
 
       sound.enable().then(() => {
         soundPending = false;
-        updateCornerButton();
+        updateSoundButton();
       });
     }
 
@@ -3259,15 +2968,93 @@
       random.start();
       phone.start();
 
-      updateCornerButton();
+      updateSoundButton();
     }
 
-    function hideOverlayImmediately() {
+    function dockSoundButton() {
+      if (!mainButton || !overlay) return;
+
+      const before = mainButton.getBoundingClientRect();
+
+      // Ensure the viewport overlay is the positioning parent.
+      if (mainButton.parentElement !== overlay) {
+        overlay.appendChild(mainButton);
+      }
+
+      gsap.killTweensOf(mainButton);
+
+      gsap.set(mainButton, {
+        position: "absolute",
+        left: "50%",
+        right: "auto",
+        top: "auto",
+        bottom: SETTINGS.soundButton.bottom,
+        margin: 0,
+        xPercent: -50,
+        yPercent: 0,
+        x: 0,
+        y: 0
+      });
+
+      const after = mainButton.getBoundingClientRect();
+
+      // Start from its existing visual location without a jump.
+      gsap.fromTo(
+        mainButton,
+        {
+          x: before.left - after.left,
+          y: before.top - after.top
+        },
+        {
+          x: 0,
+          y: 0,
+          duration: reducedMotion
+            ? 0
+            : SETTINGS.soundButton.slideDuration,
+          ease: SETTINGS.soundButton.slideEase,
+          overwrite: "auto"
+        }
+      );
+    }
+
+    function prepareOverlay() {
       if (!overlay) return;
 
-      overlay.inert = true;
-      overlay.style.display = "none";
-      overlay.setAttribute("aria-hidden", "true");
+      const styles = getComputedStyle(overlay);
+
+      overlayBackground = document.createElement("div");
+      overlayBackground.setAttribute("aria-hidden", "true");
+
+      Object.assign(overlayBackground.style, {
+        position: "absolute",
+        inset: "0",
+        zIndex: "0",
+        pointerEvents: "none",
+        background: styles.background,
+        borderRadius: styles.borderRadius,
+        backdropFilter: styles.backdropFilter,
+        webkitBackdropFilter: styles.webkitBackdropFilter
+      });
+
+      // A separate background lets the button stay fully visible.
+      Object.assign(overlay.style, {
+        position: "fixed",
+        inset: "0",
+        width: "100%",
+        height: "100%",
+        zIndex: "10002",
+        background: "transparent",
+        backdropFilter: "none",
+        webkitBackdropFilter: "none",
+        pointerEvents: "auto"
+      });
+
+      overlay.prepend(overlayBackground);
+
+      gsap.set(overlay, { autoAlpha: 1 });
+
+      overlay.inert = false;
+      overlay.removeAttribute("aria-hidden");
     }
 
     function begin(withSound) {
@@ -3276,54 +3063,50 @@
       transitioning = true;
       clearTimeout(timeout);
 
-      if (mainButton) {
-        mainButton.removeEventListener("click", onMainClick);
-        mainButton.disabled = true;
-      }
-
       if (withSound) {
         requestSound();
       } else {
         sound.disable();
+        updateSoundButton();
       }
 
-      if (!overlay) {
+      if (!overlayBackground) {
         startEffects();
         return;
       }
 
-      if (overlay.contains(document.activeElement)) {
-        document.activeElement.blur();
-      }
+      // The transparent overlay passes clicks through.
+      // The button retains pointer-events: auto.
+      overlay.style.pointerEvents = "none";
 
-      overlay.inert = true;
-
-      gsap.to(overlay, {
+      gsap.to(overlayBackground, {
         autoAlpha: 0,
         duration: reducedMotion ? 0 : SETTINGS.overlayFade,
         ease: "power2.out",
-        overwrite: true,
 
         onComplete() {
-          hideOverlayImmediately();
+          overlayBackground.remove();
+          overlayBackground = null;
+
+          dockSoundButton();
           startEffects();
         }
       });
     }
 
-    function onMainClick(event) {
-      event.preventDefault();
-      begin(true);
-    }
-
-    function onCornerClick(event) {
+    function onSoundClick(event) {
       event.preventDefault();
 
       if (soundPending) return;
 
+      if (!transitioning) {
+        begin(true);
+        return;
+      }
+
       if (sound.isEnabled()) {
         sound.disable();
-        updateCornerButton();
+        updateSoundButton();
       } else {
         requestSound();
       }
@@ -3348,7 +3131,7 @@
       phone.stop?.();
 
       sound.fadeOutAll(SETTINGS.pickup.soundFade);
-      updateCornerButton();
+      updateSoundButton();
 
       popup.inert = false;
       popup.removeAttribute("aria-hidden");
@@ -3358,90 +3141,63 @@
 
       const transition = gsap.timeline();
 
-      transition.to(
-        backdrop,
-        {
-          autoAlpha: 1,
-          "--ambient-blur": `${SETTINGS.backdrop.blur}px`,
-          duration: reducedMotion ? 0 : SETTINGS.pickup.popupFade,
-          ease: "power2.out",
-          overwrite: true
-        },
-        0
-      );
+      transition.to(backdrop, {
+        autoAlpha: 1,
+        "--ambient-blur": `${SETTINGS.backdrop.blur}px`,
+        duration: reducedMotion ? 0 : SETTINGS.pickup.popupFade,
+        ease: "power2.out",
+        overwrite: true
+      }, 0);
 
-      transition.to(
-        popup,
-        {
-          autoAlpha: 1,
-          duration: reducedMotion ? 0 : SETTINGS.pickup.popupFade,
-          ease: "power2.out",
-          overwrite: true,
+      transition.to(popup, {
+        autoAlpha: 1,
+        duration: reducedMotion ? 0 : SETTINGS.pickup.popupFade,
+        ease: "power2.out",
+        overwrite: true,
 
-          onComplete() {
-            if (!popup.hasAttribute("tabindex")) {
-              popup.setAttribute("tabindex", "-1");
-            }
-
-            popup.focus({ preventScroll: true });
+        onComplete() {
+          if (!popup.hasAttribute("tabindex")) {
+            popup.setAttribute("tabindex", "-1");
           }
-        },
-        0
-      );
+
+          popup.focus({ preventScroll: true });
+        }
+      }, 0);
 
       const videoDelay = Math.max(0, SETTINGS.ambient.delay);
 
-      transition.call(
-        () => {
-          if (video) {
-            video.play()?.catch(error => {
-              console.warn(
-                "Background video could not play:",
-                error
-              );
-            });
-          }
+      transition.call(() => {
+        if (video) {
+          video.play()?.catch(error => {
+            console.warn("Background video could not play:", error);
+          });
+        }
 
-          sound.startAmbient(SETTINGS.ambient);
-        },
-        [],
-        videoDelay
-      );
+        sound.startAmbient(SETTINGS.ambient);
+      }, [], videoDelay);
 
       if (videoWrap) {
-        transition.to(
-          videoWrap,
-          {
-            autoAlpha: 1,
-            duration: reducedMotion ? 0 : SETTINGS.ambient.videoFade,
-            ease: "power2.inOut",
-            overwrite: true
-          },
-          videoDelay
-        );
+        transition.to(videoWrap, {
+          autoAlpha: 1,
+          duration: reducedMotion ? 0 : SETTINGS.ambient.videoFade,
+          ease: "power2.inOut",
+          overwrite: true
+        }, videoDelay);
       }
 
-      transition.call(
-        () => steps.start(),
-        [],
-        videoDelay
-      );
+      transition.call(() => steps.start(), [], videoDelay);
     }
 
     phoneButton?.addEventListener("click", onPickup);
-    cornerButton?.addEventListener("click", onCornerClick);
+    mainButton?.addEventListener("click", onSoundClick);
 
     if (!overlay) {
       begin(false);
       return;
     }
 
-    gsap.set(overlay, { autoAlpha: 1 });
-
-    overlay.inert = false;
-    overlay.removeAttribute("aria-hidden");
-
-    mainButton?.addEventListener("click", onMainClick);
+    prepareOverlay();
+    updateSoundButton();
 
     const waitSeconds = readNumber(
       overlay,
