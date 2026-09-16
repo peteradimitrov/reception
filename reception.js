@@ -2345,7 +2345,7 @@
     };
   }
 
-  function createPhone(options, sound, onProximity) {
+  function createPhone(options, sound, onProximity, onReveal) {
     const button = select(".phone-btn");
     if (!button) return { start() {} };
     const track = button.closest(".phone-slider");
@@ -2550,6 +2550,7 @@
         started = true;
 
         revealTimer = gsap.delayedCall(delay, () => {
+          onReveal?.();
           titles.start();
           button.inert = false;
           button.removeAttribute("aria-hidden");
@@ -3165,7 +3166,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 18px;
+        gap: 8px;
         min-height: 44px;
         max-width: 100%;
         margin: 0;
@@ -3183,7 +3184,7 @@
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
       }
-      .reception-sound-toggle__label { min-width: 9em; text-align: left; }
+      .reception-sound-toggle__label { min-width: 9em; text-align: right; }
       .reception-sound-toggle__track {
         position: relative;
         display: block;
@@ -3191,6 +3192,10 @@
         width: 54px;
         height: 32px;
         border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        transition: background-color .28s ease;
+      }
+      .reception-sound-toggle[aria-checked="true"] .reception-sound-toggle__track {
         background: #fff;
       }
       .reception-sound-toggle__thumb {
@@ -3210,6 +3215,7 @@
       .reception-sound-toggle:focus-visible { outline: 2px solid #fff; outline-offset: 6px; border-radius: 6px; }
       .reception-sound-toggle:disabled { cursor: progress; }
       @media (prefers-reduced-motion: reduce) {
+        .reception-sound-toggle__track,
         .reception-sound-toggle__thumb { transition: none; }
       }
     `;
@@ -3237,14 +3243,19 @@
           ease: "power2.out"
         });
       },
-      keepAbovePopup() {
-        const group = mount.closest("[data-phone-button]");
-        if (group) {
-          group.style.zIndex = "10002";
-          group.style.pointerEvents = "none";
-        }
-        mount.style.zIndex = "10002";
-        mount.style.pointerEvents = "auto";
+      hide() {
+        button.inert = true;
+        button.setAttribute("aria-hidden", "true");
+        button.style.pointerEvents = "none";
+        mount.style.pointerEvents = "none";
+        gsap.to(button, {
+          autoAlpha: 0,
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? 0
+            : SETTINGS.pickup.phoneFade,
+          ease: "power2.out",
+          overwrite: true
+        });
       }
     };
   }
@@ -3325,7 +3336,8 @@
     const phone = createPhone(
       SETTINGS.phone,
       sound,
-      updateBackdrop
+      updateBackdrop,
+      () => soundToggle?.show()
     );
 
     let transitioning = false;
@@ -3469,7 +3481,6 @@
       if (experienceStarted) return;
 
       experienceStarted = true;
-      soundToggle?.show();
 
       trail.start();
       random.start();
@@ -3640,7 +3651,7 @@
       }
 
       pickedUp = true;
-      soundToggle?.keepAbovePopup();
+      soundToggle?.hide();
 
       phoneButton.removeEventListener("click", onPickup);
       phoneSlider?.stop();
