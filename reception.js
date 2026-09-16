@@ -3138,6 +3138,117 @@
     };
   }
 
+  function createSoundToggle() {
+    const mount = select("[data-sound-toggle]");
+    if (!mount) return null;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "reception-sound-toggle";
+    button.setAttribute("role", "switch");
+    button.setAttribute("aria-label", "Sound");
+    button.setAttribute("aria-checked", "false");
+    const label = document.createElement("span");
+    label.className = "reception-sound-toggle__label";
+    label.textContent = "Enable sound";
+    const track = document.createElement("span");
+    track.className = "reception-sound-toggle__track";
+    track.setAttribute("aria-hidden", "true");
+    const thumb = document.createElement("span");
+    thumb.className = "reception-sound-toggle__thumb";
+    track.appendChild(thumb);
+    button.append(label, track);
+    mount.appendChild(button);
+    const style = document.createElement("style");
+    style.textContent = `
+      [data-sound-toggle] { position: relative; pointer-events: auto; }
+      .reception-sound-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        min-height: 44px;
+        max-width: 100%;
+        margin: 0;
+        padding: 4px 0;
+        border: 0;
+        background: transparent;
+        color: #fff;
+        font: inherit;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.2;
+        text-transform: uppercase;
+        cursor: pointer;
+        pointer-events: auto;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .reception-sound-toggle__label { min-width: 9em; text-align: left; }
+      .reception-sound-toggle__track {
+        position: relative;
+        display: block;
+        flex: 0 0 54px;
+        width: 54px;
+        height: 32px;
+        border-radius: 999px;
+        background: #fff;
+      }
+      .reception-sound-toggle__thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #000;
+        transform: translateX(0);
+        transition: transform .28s cubic-bezier(.22,.61,.36,1);
+      }
+      .reception-sound-toggle[aria-checked="true"] .reception-sound-toggle__thumb {
+        transform: translateX(22px);
+      }
+      .reception-sound-toggle:focus-visible { outline: 2px solid #fff; outline-offset: 6px; border-radius: 6px; }
+      .reception-sound-toggle:disabled { cursor: progress; }
+      @media (prefers-reduced-motion: reduce) {
+        .reception-sound-toggle__thumb { transition: none; }
+      }
+    `;
+    document.head.appendChild(style);
+    button.inert = true;
+    gsap.set(button, { autoAlpha: 0 });
+    let shown = false;
+    return {
+      button,
+      mount,
+      update(enabled, pending) {
+        label.textContent = enabled ? "Disable sound" : "Enable sound";
+        button.setAttribute("aria-checked", String(enabled));
+        button.disabled = pending;
+        if (pending) button.setAttribute("aria-busy", "true");
+        else button.removeAttribute("aria-busy");
+      },
+      show() {
+        if (shown) return;
+        shown = true;
+        button.inert = false;
+        gsap.to(button, {
+          autoAlpha: 1,
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : .3,
+          ease: "power2.out"
+        });
+      },
+      keepAbovePopup() {
+        const group = mount.closest("[data-phone-button]");
+        if (group) {
+          group.style.zIndex = "10002";
+          group.style.pointerEvents = "none";
+        }
+        mount.style.zIndex = "10002";
+        mount.style.pointerEvents = "auto";
+      }
+    };
+  }
+
   function setupPage() {
     if (window.__receptionSequenceInitialized) return;
 
@@ -3159,6 +3270,7 @@
     );
 
     const cornerButton = select(".sound-wrap__btn--corner");
+    const soundToggle = createSoundToggle();
     const phoneButton = select(".phone-btn");
     const popup = select(".genius-ambient-popup");
     const phoneSlider = createPhoneSlider(phoneButton, () => onPickup());
@@ -3309,9 +3421,9 @@
     }
 
     function updateSoundButton() {
-      if (!mainButton) return;
-
       const enabled = sound.isEnabled();
+      soundToggle?.update(enabled, soundPending);
+      if (!mainButton) return;
       const action = enabled ? "Mute sound" : "Enable sound";
 
       mainButton.disabled = soundPending;
@@ -3357,6 +3469,7 @@
       if (experienceStarted) return;
 
       experienceStarted = true;
+      soundToggle?.show();
 
       trail.start();
       random.start();
@@ -3471,8 +3584,19 @@
       // Pass clicks through the overlay, keeping its button interactive.
       overlay.style.pointerEvents = "none";
 
-      // Slide the button while the background fades.
-      dockSoundButton();
+      if (soundToggle && mainButton) {
+        // Replace the opening control with the toggle beside the phone title.
+        if (mainButton.contains(document.activeElement)) document.activeElement.blur();
+        mainButton.inert = true;
+        gsap.to(mainButton, {
+          autoAlpha: 0,
+          duration: reducedMotion ? 0 : SETTINGS.overlayFade,
+          ease: "power2.out",
+          onComplete() { mainButton.style.display = "none"; }
+        });
+      } else {
+        dockSoundButton();
+      }
 
       gsap.to(overlayBackground, {
         autoAlpha: 0,
@@ -3516,6 +3640,7 @@
       }
 
       pickedUp = true;
+      soundToggle?.keepAbovePopup();
 
       phoneButton.removeEventListener("click", onPickup);
       phoneSlider?.stop();
@@ -3603,6 +3728,7 @@
 
     if (!phoneSlider) phoneButton?.addEventListener("click", onPickup);
     mainButton?.addEventListener("click", onSoundClick);
+    soundToggle?.button.addEventListener("click", onSoundClick);
 
     if (!overlay) {
       begin(false);
