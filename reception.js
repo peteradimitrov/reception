@@ -69,7 +69,8 @@
       slider: {
         threshold: 0.9,
         returnDuration: 0.45,
-        completeDuration: 0.18
+        completeDuration: 0.18,
+        clickDuration: 0.55
       }
     },
 
@@ -183,7 +184,7 @@
     const instructions = document.createElement("span");
     instructions.className = "phone-slider__instructions";
     instructions.id = "reception-slide-instructions";
-    instructions.textContent = "Drag the phone right and release to answer. With a keyboard, press Enter or Space.";
+    instructions.textContent = "Click or tap to answer, or drag the phone right and release. With a keyboard, press Enter or Space.";
     const style = document.createElement("style");
     style.textContent = `
       .phone-slider {
@@ -309,6 +310,7 @@
     const events = new AbortController();
     let drag = null, travel = 0, motion = null, resizeObserver = null;
     let completing = false, destroyed = false, resizing = false;
+    let dragged = false, cancelledPress = false;
     function ready() { return !destroyed && !completing && !button.inert; }
     function updateProgress() {
       const x = Number(gsap.getProperty(button, "x")) || 0;
@@ -336,14 +338,14 @@
         onComplete() { drag?.update(); updateProgress(); }
       });
     }
-    function answer() {
+    function answer(duration = options.completeDuration) {
       if (!ready() || travel <= 0) return;
       completing = true;
       motion?.kill();
       drag?.disable();
       button.setAttribute("aria-disabled", "true");
       motion = gsap.to(button, {
-        x: travel, duration: reduced ? 0 : options.completeDuration,
+        x: travel, duration: reduced ? 0 : duration,
         ease: "power2.out", overwrite: "auto", onUpdate: updateProgress,
         onComplete() { if (!destroyed) onAnswer(); }
       });
@@ -351,6 +353,7 @@
     function measure() {
       if (destroyed || completing) return;
       resizing = true;
+      cancelledPress = true;
       if (drag?.isPressed) drag.endDrag();
       motion?.kill();
       const inset = parseFloat(getComputedStyle(button).left) || 0;
@@ -367,18 +370,32 @@
       edgeResistance: 1, minimumMovement: 3, dragClickables: true,
       allowNativeTouchScrolling: true, zIndexBoost: false,
       cursor: "grab", activeCursor: "grabbing",
-      onPress() { motion?.kill(); if (!ready()) this.endDrag(); },
+      onPress() {
+        dragged = false;
+        cancelledPress = false;
+        motion?.kill();
+        if (!ready()) this.endDrag();
+      },
+      onDragStart() { dragged = true; },
       onDrag() { if (ready()) updateProgress(); },
+      onClick() {
+        if (!dragged && !cancelledPress) answer(options.clickDuration);
+      },
       onRelease() {
         if (!ready() || resizing) return;
-        const cancelled = /cancel/i.test(this.pointerEvent?.type || "");
-        if (!cancelled && travel > 0 && this.x >= travel * options.threshold) answer();
-        else reset(cancelled ? null : this.pointerEvent);
+        cancelledPress = /cancel/i.test(this.pointerEvent?.type || "");
+        if (cancelledPress) reset();
+        else if (dragged) {
+          if (travel > 0 && this.x >= travel * options.threshold) answer();
+          else reset(this.pointerEvent);
+        }
+        // A genuine click is handled by Draggable.onClick, without a reset first.
       }
     })[0];
     function cancelGesture() {
       if (!ready()) return;
       resizing = true;
+      cancelledPress = true;
       if (drag.isPressed) drag.endDrag();
       resizing = false;
       reset();
@@ -386,12 +403,12 @@
     button.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        if (!event.repeat) answer();
+        if (!event.repeat) answer(options.clickDuration);
       }
     }, { signal: events.signal });
     button.addEventListener("click", event => {
       event.preventDefault();
-      if (event.detail === 0) answer();
+      if (event.detail === 0 && !dragged && !cancelledPress) answer(options.clickDuration);
     }, { signal: events.signal });
     window.addEventListener("blur", cancelGesture, { signal: events.signal });
     document.addEventListener("visibilitychange", () => {
