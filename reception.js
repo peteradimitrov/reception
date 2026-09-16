@@ -65,7 +65,12 @@
       delay: 4,
       revealDuration: 0.4,
       proximityRadius: 300,
-      volumeFade: 0.18
+      volumeFade: 0.18,
+      slider: {
+        threshold: 0.9,
+        returnDuration: 0.45,
+        completeDuration: 0.18
+      }
     },
 
     counter: {
@@ -158,6 +163,246 @@
       : fallback;
   }
 
+  function createPhoneSlider(button, onAnswer) {
+    if (!button || !window.Draggable) {
+      if (button) console.warn("Load GSAP Draggable to enable slide to answer.");
+      return null;
+    }
+    const options = SETTINGS.phone.slider;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const parent = button.parentElement;
+    const label = parent.querySelector(".phone-btn__label") ||
+      select(".phone-btn__label") || document.createElement("span");
+    const track = document.createElement("div");
+    track.className = "phone-slider";
+    track.setAttribute("role", "group");
+    track.setAttribute("aria-label", "Incoming call");
+    label.classList.add("phone-btn__label", "phone-slider__label");
+    label.textContent = "Slide to answer";
+    label.setAttribute("aria-hidden", "true");
+    const instructions = document.createElement("span");
+    instructions.className = "phone-slider__instructions";
+    instructions.id = "reception-slide-instructions";
+    instructions.textContent = "Drag the phone right and release to answer. With a keyboard, press Enter or Space.";
+    const style = document.createElement("style");
+    style.textContent = `
+      .phone-slider {
+        --slider-handle: 64px;
+        --slider-inset: 8px;
+        position: relative;
+        width: min(320px, calc(100vw - 48px));
+        height: calc(var(--slider-handle) + var(--slider-inset) * 2);
+        box-sizing: border-box;
+        border-radius: 999px;
+        isolation: isolate;
+        opacity: 0;
+        visibility: hidden;
+        overflow: visible;
+        background:
+          radial-gradient(ellipse at 25% 0%, rgba(255,255,255,.13), transparent 65%),
+          linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+        -webkit-backdrop-filter: blur(24px) saturate(145%);
+        backdrop-filter: blur(24px) saturate(145%);
+        box-shadow: inset 0 1px 2px rgba(255,255,255,.1), 0 12px 32px rgba(0,0,0,.16);
+        touch-action: pan-y;
+      }
+      .phone-slider::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        padding: 1px;
+        border-radius: inherit;
+        pointer-events: none;
+        background: linear-gradient(135deg, rgba(255,255,255,.6),
+          rgba(255,255,255,.12) 35%, rgba(255,255,255,.07) 65%, rgba(255,255,255,.4));
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        mask-composite: exclude;
+      }
+      .phone-slider > .phone-btn {
+        position: absolute;
+        inset: var(--slider-inset) auto auto var(--slider-inset);
+        width: var(--slider-handle);
+        height: var(--slider-handle);
+        min-width: 0;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        z-index: 2;
+        cursor: grab;
+        touch-action: pan-y;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .phone-slider > .phone-btn .icon-chip {
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        background: linear-gradient(145deg, rgba(83,229,119,.96), rgba(29,167,70,.96));
+        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(16px);
+        box-shadow: inset 0 1px 1px rgba(255,255,255,.2), 0 3px 12px rgba(0,0,0,.18);
+      }
+      .phone-slider > .phone-btn .icon-chip__size {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+      }
+      .phone-slider > .phone-btn .icon { font-size: 30px; line-height: 1; }
+      .phone-slider > .phone-btn:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+      .phone-slider .phone-slider__label {
+        position: absolute;
+        inset: 0 12px 0 calc(var(--slider-handle) + 12px);
+        width: auto;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transform: none;
+        font-size: clamp(14px, 4vw, 17px);
+        line-height: 1.2;
+        font-weight: 500;
+        letter-spacing: .01em;
+        text-transform: none;
+        white-space: nowrap;
+        color: #fff;
+        pointer-events: none;
+      }
+      .phone-slider__instructions {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (max-width: 359px) { .phone-slider { --slider-handle: 56px; } }
+    `;
+    document.head.appendChild(style);
+    parent.insertBefore(track, button);
+    track.append(label, button, instructions);
+    if (button.matches("button")) button.type = "button";
+    else {
+      button.setAttribute("role", "button");
+      button.setAttribute("tabindex", "0");
+    }
+    button.setAttribute("aria-label", "Answer call");
+    button.setAttribute("aria-describedby", instructions.id);
+    gsap.set(button, { x: 0, y: 0, xPercent: 0, yPercent: 0 });
+    const events = new AbortController();
+    let drag = null, travel = 0, motion = null, resizeObserver = null;
+    let completing = false, destroyed = false, resizing = false;
+    function ready() { return !destroyed && !completing && !button.inert; }
+    function updateProgress() {
+      const x = Number(gsap.getProperty(button, "x")) || 0;
+      const progress = travel > 0 ? clamp(x / travel, 0, 1) : 0;
+      gsap.set(label, { opacity: .5 * (1 - progress) });
+    }
+    function reset() {
+      motion?.kill();
+      if (destroyed) return;
+      motion = gsap.to(button, {
+        x: 0, duration: reduced ? 0 : options.returnDuration,
+        ease: "power3.out", overwrite: "auto", onUpdate: updateProgress,
+        onComplete() { drag?.update(); updateProgress(); }
+      });
+    }
+    function answer() {
+      if (!ready() || travel <= 0) return;
+      completing = true;
+      motion?.kill();
+      drag?.disable();
+      button.setAttribute("aria-disabled", "true");
+      motion = gsap.to(button, {
+        x: travel, duration: reduced ? 0 : options.completeDuration,
+        ease: "power2.out", overwrite: "auto", onUpdate: updateProgress,
+        onComplete() { if (!destroyed) onAnswer(); }
+      });
+    }
+    function measure() {
+      if (destroyed || completing) return;
+      resizing = true;
+      if (drag?.isPressed) drag.endDrag();
+      motion?.kill();
+      const inset = parseFloat(getComputedStyle(button).left) || 0;
+      travel = Math.max(0, track.clientWidth - button.offsetWidth - inset * 2);
+      gsap.set(button, { x: 0 });
+      drag?.applyBounds({ minX: 0, maxX: travel });
+      drag?.update();
+      if (!button.inert) updateProgress();
+      resizing = false;
+    }
+    measure();
+    drag = Draggable.create(button, {
+      type: "x", bounds: { minX: 0, maxX: travel }, inertia: false,
+      edgeResistance: 1, minimumMovement: 3, dragClickables: true,
+      allowNativeTouchScrolling: true, zIndexBoost: false,
+      cursor: "grab", activeCursor: "grabbing",
+      onPress() { motion?.kill(); if (!ready()) this.endDrag(); },
+      onDrag() { if (ready()) updateProgress(); },
+      onRelease() {
+        if (!ready() || resizing) return;
+        const cancelled = /cancel/i.test(this.pointerEvent?.type || "");
+        if (!cancelled && travel > 0 && this.x >= travel * options.threshold) answer();
+        else reset();
+      }
+    })[0];
+    function cancelGesture() {
+      if (!ready()) return;
+      resizing = true;
+      if (drag.isPressed) drag.endDrag();
+      resizing = false;
+      reset();
+    }
+    button.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        if (!event.repeat) answer();
+      }
+    }, { signal: events.signal });
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      if (event.detail === 0) answer();
+    }, { signal: events.signal });
+    window.addEventListener("blur", cancelGesture, { signal: events.signal });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) cancelGesture();
+    }, { signal: events.signal });
+    if (window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(measure);
+      resizeObserver.observe(track);
+      resizeObserver.observe(button);
+    } else window.addEventListener("resize", measure, { signal: events.signal });
+    return {
+      track,
+      stop() {
+        if (destroyed) return;
+        destroyed = true;
+        events.abort();
+        resizeObserver?.disconnect();
+        motion?.kill();
+        drag?.kill();
+      }
+    };
+  }
+
   function createPhoneZone(options) {
     const button = select(".phone-btn");
 
@@ -190,7 +435,7 @@
       cachedFrame = frame;
       cachedRect = null;
 
-      const rect = button.getBoundingClientRect();
+      const rect = (button.closest(".phone-slider") || button).getBoundingClientRect();
       if (!rect.width || !rect.height) return null;
 
       const radius = readNumber(
@@ -1982,6 +2227,7 @@
   function createPhone(options, sound, onProximity) {
     const button = select(".phone-btn");
     if (!button) return { start() {} };
+    const track = button.closest(".phone-slider");
 
     const label =
       button.parentElement?.querySelector(".phone-btn__label") ||
@@ -2022,6 +2268,7 @@
 
     if (label) gsap.set(label, { autoAlpha: 0 });
     gsap.set(button, { autoAlpha: 0 });
+    if (track) gsap.set(track, { autoAlpha: 0 });
 
     button.inert = true;
     button.setAttribute("aria-hidden", "true");
@@ -2031,7 +2278,7 @@
       frame = null;
       if (!visible) return;
 
-      const rect = button.getBoundingClientRect();
+      const rect = (track || button).getBoundingClientRect();
 
       const onScreen =
         rect.width > 0 &&
@@ -2175,6 +2422,11 @@
           button.inert = false;
           button.removeAttribute("aria-hidden");
 
+          if (track) gsap.to(track, {
+            autoAlpha: 1,
+            duration: motionPreference.matches ? 0 : options.revealDuration,
+            ease: "power2.out"
+          });
           if (label) {
             gsap.to(label, {
               autoAlpha: 0.5,
@@ -2214,7 +2466,7 @@
         cancelAnimationFrame(frame);
 
         const phoneGroup = button.closest("[data-phone-button]");
-        const targets = label ? [button, label] : [button];
+        const targets = track ? [track] : label ? [button, label] : [button];
 
         gsap.killTweensOf(targets);
         button.inert = true;
@@ -2760,6 +3012,7 @@
     window.__receptionSequenceInitialized = true;
 
     gsap.registerPlugin(ScrollTrigger);
+    if (window.Draggable) gsap.registerPlugin(Draggable);
     if (window.SplitText) gsap.registerPlugin(SplitText);
 
     const overlay = select(".sound-wrap");
@@ -2771,6 +3024,7 @@
     const cornerButton = select(".sound-wrap__btn--corner");
     const phoneButton = select(".phone-btn");
     const popup = select(".genius-ambient-popup");
+    const phoneSlider = createPhoneSlider(phoneButton, () => onPickup());
 
     const steps = createSteps(popup);
     const backdrop = popup ? document.createElement("div") : null;
@@ -3115,7 +3369,7 @@
     }
 
     function onPickup(event) {
-      event.preventDefault();
+      event?.preventDefault();
 
       if (!experienceStarted || pickedUp) return;
 
@@ -3127,6 +3381,7 @@
       pickedUp = true;
 
       phoneButton.removeEventListener("click", onPickup);
+      phoneSlider?.stop();
 
       trail.stop?.();
       random.stop?.();
@@ -3209,7 +3464,7 @@
       transition.call(() => steps.start(), [], videoDelay);
     }
 
-    phoneButton?.addEventListener("click", onPickup);
+    if (!phoneSlider) phoneButton?.addEventListener("click", onPickup);
     mainButton?.addEventListener("click", onSoundClick);
 
     if (!overlay) {
