@@ -315,10 +315,21 @@
       const progress = travel > 0 ? clamp(x / travel, 0, 1) : 0;
       gsap.set(label, { opacity: .5 * (1 - progress) });
     }
-    function reset() {
+    function reset(releaseEvent = null) {
       motion?.kill();
       if (destroyed) return;
-      button.dispatchEvent(new Event("reception:slide-reset"));
+      const isHoverPointer = releaseEvent &&
+        !releaseEvent.sourceCapabilities?.firesTouchEvents &&
+        (releaseEvent.pointerType === "mouse" ||
+          releaseEvent.pointerType === "pen" ||
+          (!releaseEvent.pointerType && /^(mouse|click)/.test(releaseEvent.type || "")));
+      const releasePointer = isHoverPointer &&
+        Number.isFinite(releaseEvent.clientX) && Number.isFinite(releaseEvent.clientY)
+        ? { x: releaseEvent.clientX, y: releaseEvent.clientY }
+        : null;
+      button.dispatchEvent(new CustomEvent("reception:slide-reset", {
+        detail: { pointer: releasePointer }
+      }));
       motion = gsap.to(button, {
         x: 0, duration: reduced ? 0 : options.returnDuration,
         ease: "power3.out", overwrite: "auto", onUpdate: updateProgress,
@@ -362,7 +373,7 @@
         if (!ready() || resizing) return;
         const cancelled = /cancel/i.test(this.pointerEvent?.type || "");
         if (!cancelled && travel > 0 && this.x >= travel * options.threshold) answer();
-        else reset();
+        else reset(cancelled ? null : this.pointerEvent);
       }
     })[0];
     function cancelGesture() {
@@ -2408,9 +2419,9 @@
       scheduleUpdate();
     }, { signal: events.signal });
 
-    button.addEventListener("reception:slide-reset", () => {
-      // A cancelled slide must not retain the pointer/focus proximity effect.
-      pointer = null;
+    button.addEventListener("reception:slide-reset", event => {
+      // Mouse release keeps its actual proximity; touch/cancellation clears it.
+      pointer = event.detail?.pointer || null;
       focused = false;
       cancelAnimationFrame(frame);
       frame = null;
