@@ -3080,6 +3080,9 @@
       // Pass clicks through the overlay, keeping its button interactive.
       overlay.style.pointerEvents = "none";
 
+      // Slide the button while the background fades.
+      dockSoundButton();
+
       gsap.to(overlayBackground, {
         autoAlpha: 0,
         duration: reducedMotion ? 0 : SETTINGS.overlayFade,
@@ -3089,7 +3092,6 @@
           overlayBackground.remove();
           overlayBackground = null;
 
-          dockSoundButton();
           startEffects();
         }
       });
