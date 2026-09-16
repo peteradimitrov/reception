@@ -35,14 +35,14 @@
 
     steps: {
       delay: 0.15,
-      enter: 0.5,
+      enter: 0.9,
       exit: 0.3,
-      stagger: 0.015,
+      stagger: 0.025,
       blur: 8,
       scale: 0.98,
       gap: 0.1,
       formDelay: 0.08,
-      formFade: 0.35,
+      formFade: 0.7,
       submitFormFade: 0.3,
       submitTitleDelay: 0.08,
       submitExit: 0.6,
@@ -63,7 +63,7 @@
 
     phone: {
       delay: 4,
-      revealDuration: 0.4,
+      revealDuration: 0.8,
       proximityRadius: 300,
       volumeFade: 0.18,
       slider: {
@@ -3239,7 +3239,9 @@
         button.inert = false;
         gsap.to(button, {
           autoAlpha: 1,
-          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : .3,
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? 0
+            : SETTINGS.phone.revealDuration,
           ease: "power2.out"
         });
       },
