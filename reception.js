@@ -472,16 +472,24 @@
     let chars = [], splits = [];
     gsap.set(titles, { autoAlpha: 0 });
     titles.forEach(title => {
+      // Request this title's font early without delaying the scheduled reveal.
+      if (document.fonts?.load) {
+        const style = getComputedStyle(title);
+        const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        try {
+          document.fonts.load(font, title.textContent || " ").catch(() => {});
+        } catch (_) {
+          // A fallback font can still render the title on schedule.
+        }
+      }
       title.inert = true;
       title.setAttribute("aria-hidden", "true");
     });
     return {
       elements: titles,
-      async start(onReady) {
+      start(onReady) {
         if (started || stopped) return;
         started = true;
-        if (titles.length && document.fonts) await document.fonts.ready;
-        if (stopped) return;
         const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         chars = titles.flatMap(title => {
           if (reduced || !window.SplitText) return [title];
@@ -503,7 +511,7 @@
           title.inert = false;
           title.removeAttribute("aria-hidden");
         });
-        // Start the controls only after font loading and text preparation.
+        // Text and controls start in the same frame without a font-loading wait.
         onReady?.();
         animation = gsap.to(chars, {
           autoAlpha: 1, filter: "blur(0px)", scale: 1,
