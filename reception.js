@@ -510,6 +510,12 @@
 
   function createPhoneZone(options) {
     const button = select(".phone-btn");
+    const group = button?.closest("[data-phone-button]");
+    const titles = getPhoneTitles(button);
+
+    const label =
+      button?.parentElement?.querySelector(".phone-btn__label") ||
+      select(".phone-btn__label");
 
     let cachedFrame = -1;
     let cachedRect = null;
@@ -536,17 +542,33 @@
       cachedFrame = frame;
       cachedRect = null;
 
-      // Protect only the slider, never the parent title/toggle wrapper.
-      const control = button.closest(".phone-slider") || button;
-      const rect = control.getBoundingClientRect();
-      if (!rect.width || !rect.height) return null;
+      // Protect actual controls individually, leaving the gaps available.
+      const toggle = group?.querySelector(".reception-sound-toggle");
+      const controls = [button.closest(".phone-slider") || button, toggle, label];
+      const regions = controls.filter(Boolean)
+        .map(element => element.getBoundingClientRect())
+        .filter(rect => rect.width > 0 && rect.height > 0);
+
+      // Text ranges avoid reserving a heading's full block width.
+      for (const title of titles) {
+        const range = document.createRange();
+        range.selectNodeContents(title);
+        const textRects = Array.from(range.getClientRects())
+          .filter(rect => rect.width > 0 && rect.height > 0);
+        regions.push(...(textRects.length ? textRects : [title.getBoundingClientRect()]));
+      }
+      if (!regions.length) return null;
 
       cachedRect = {
-        regions: [rect],
-        left: rect.left,
-        right: rect.right,
-        // Read directly from the phone button. Zero means no extra padding.
-        clearance: readNumber(button, "data-phone-clearance", 52)
+        regions,
+        // Bounds are used only to park mobile overflow items off screen.
+        left: Math.min(...regions.map(rect => rect.left)),
+        right: Math.max(...regions.map(rect => rect.right)),
+        clearance: readPhoneNumber(
+          button,
+          "data-phone-clearance",
+          52
+        )
       };
 
       return cachedRect;
@@ -1428,12 +1450,21 @@
 
       if (distance <= threshold) return;
 
-      last = { x, y };
-
-      const item = nextItem();
-      if (!item) return;
-
-      if (activate(item, x, y)) globalIndex++;
+      // A wide card may not fit even when a smaller card can.
+      // Count distance only from an actual appearance, not a blocked attempt.
+      let placed = false;
+      for (let attempt = 0; attempt < items.length; attempt++) {
+        const item = nextItem();
+        if (!item) break;
+        if (activate(item, x, y)) {
+          globalIndex++;
+          last = { x, y };
+          placed = true;
+          break;
+        }
+      }
+      // Resume immediately when the pointer leaves the protected content.
+      if (!placed) last = null;
 
       if (retained.size === items.length) stop();
     }
@@ -2030,11 +2061,29 @@
               (candidate.y + size.height / 2 - centerY) / usableHeight
             );
 
+            // Prefer breathing room, then allow overlap as the screen fills.
+            const gap = 24 * (1 - density * progress * 0.6);
+            const nearby = getOverlap({
+              x: candidate.x - gap / 2,
+              y: candidate.y - gap / 2,
+              width: candidate.width + gap,
+              height: candidate.height + gap
+            }, placements).total;
+            let crowding = 0;
+            for (const other of placements) {
+              const dx = (candidate.x + candidate.width / 2 -
+                other.x - other.width / 2) / usableWidth;
+              const dy = (candidate.y + candidate.height / 2 -
+                other.y - other.height / 2) / usableHeight;
+              crowding += Math.exp(-(dx * dx + dy * dy) / 0.025);
+            }
             const score =
               Math.max(0, overlap.maximum - allowedOverlap) * 20 +
-              overlap.total +
-              slotDistance * 0.18 +
-              Math.random() * 0.12;
+              overlap.total * 2 +
+              nearby * 0.7 +
+              crowding * 0.18 +
+              slotDistance * 0.12 +
+              Math.random() * 0.035;
 
             if (score < bestScore) {
               best = candidate;
