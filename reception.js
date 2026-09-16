@@ -318,6 +318,7 @@
     function reset() {
       motion?.kill();
       if (destroyed) return;
+      button.dispatchEvent(new Event("reception:slide-reset"));
       motion = gsap.to(button, {
         x: 0, duration: reduced ? 0 : options.returnDuration,
         ease: "power3.out", overwrite: "auto", onUpdate: updateProgress,
@@ -2403,8 +2404,17 @@
     });
 
     button.addEventListener("focusin", () => {
-      focused = true;
+      focused = button.matches(":focus-visible");
       scheduleUpdate();
+    }, { signal: events.signal });
+
+    button.addEventListener("reception:slide-reset", () => {
+      // A cancelled slide must not retain the pointer/focus proximity effect.
+      pointer = null;
+      focused = false;
+      cancelAnimationFrame(frame);
+      frame = null;
+      updateVolume();
     }, { signal: events.signal });
 
     button.addEventListener("focusout", event => {
