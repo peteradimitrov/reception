@@ -477,10 +477,10 @@
     });
     return {
       elements: titles,
-      async start() {
-        if (started || stopped || !titles.length) return;
+      async start(onReady) {
+        if (started || stopped) return;
         started = true;
-        if (document.fonts) await document.fonts.ready;
+        if (titles.length && document.fonts) await document.fonts.ready;
         if (stopped) return;
         const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         chars = titles.flatMap(title => {
@@ -503,6 +503,8 @@
           title.inert = false;
           title.removeAttribute("aria-hidden");
         });
+        // Start the controls only after font loading and text preparation.
+        onReady?.();
         animation = gsap.to(chars, {
           autoAlpha: 1, filter: "blur(0px)", scale: 1,
           duration: reduced ? .2 : options.enter,
@@ -2615,9 +2617,8 @@
         if (started) return;
         started = true;
 
-        revealTimer = gsap.delayedCall(delay, () => {
+        revealTimer = gsap.delayedCall(delay, () => titles.start(() => {
           onReveal?.();
-          titles.start();
           button.inert = false;
           button.removeAttribute("aria-hidden");
 
@@ -2652,7 +2653,7 @@
               syncReducedMotionRinging();
             }
           });
-        });
+        }));
       },
 
       stop() {
