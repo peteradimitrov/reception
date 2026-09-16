@@ -542,17 +542,22 @@
       cachedFrame = frame;
       cachedRect = null;
 
-      // Protect the full group, including any title extending outside it.
-      const regions = [group || button.closest(".phone-slider") || button, ...titles]
+      // Protect actual controls individually, leaving the gaps available.
+      const toggle = group?.querySelector(".reception-sound-toggle");
+      const controls = [button.closest(".phone-slider") || button, toggle, label];
+      const regions = controls.filter(Boolean)
         .map(element => element.getBoundingClientRect())
         .filter(rect => rect.width > 0 && rect.height > 0);
+
+      // Text ranges avoid reserving a heading's full block width.
+      for (const title of titles) {
+        const range = document.createRange();
+        range.selectNodeContents(title);
+        const textRects = Array.from(range.getClientRects())
+          .filter(rect => rect.width > 0 && rect.height > 0);
+        regions.push(...(textRects.length ? textRects : [title.getBoundingClientRect()]));
+      }
       if (!regions.length) return null;
-      const rect = {
-        left: Math.min(...regions.map(r => r.left)),
-        top: Math.min(...regions.map(r => r.top)),
-        right: Math.max(...regions.map(r => r.right)),
-        bottom: Math.max(...regions.map(r => r.bottom))
-      };
 
       const radius = readPhoneNumber(
         button,
@@ -562,11 +567,10 @@
       );
 
       cachedRect = {
-        left: rect.left,
-        top: rect.top,
-        right: rect.right,
-        bottom: rect.bottom,
-        label: label?.getBoundingClientRect(),
+        regions,
+        // Bounds are used only to park mobile overflow items off screen.
+        left: Math.min(...regions.map(rect => rect.left)),
+        right: Math.max(...regions.map(rect => rect.right)),
         clearance: readPhoneNumber(
           button,
           "data-phone-clearance",
@@ -580,29 +584,11 @@
     function overlaps(rect, zone = getRect()) {
       if (!zone) return false;
 
-      const dx = Math.max(
-        zone.left - rect.right,
-        rect.left - zone.right,
-        0
-      );
-
-      const dy = Math.max(
-        zone.top - rect.bottom,
-        rect.top - zone.bottom,
-        0
-      );
-
-      const text = zone.label;
-
-      const touchesLabel =
-        text?.width > 0 &&
-        text?.height > 0 &&
-        rect.right > text.left - 12 &&
-        rect.left < text.right + 12 &&
-        rect.bottom > text.top - 12 &&
-        rect.top < text.bottom + 12;
-
-      return Math.hypot(dx, dy) <= zone.clearance || !!touchesLabel;
+      return zone.regions.some(region => {
+        const dx = Math.max(region.left - rect.right, rect.left - region.right, 0);
+        const dy = Math.max(region.top - rect.bottom, rect.top - region.bottom, 0);
+        return Math.hypot(dx, dy) <= zone.clearance;
+      });
     }
 
     function getOrigin(list) {
@@ -2029,7 +2015,7 @@
 
         let best = null;
         let bestScore = Infinity;
-        let acceptable = false;
+
 
         const availableX = width - size.width;
         const availableY = height - size.height - entranceMove;
@@ -2076,19 +2062,18 @@
             const score =
               Math.max(0, overlap.maximum - allowedOverlap) * 20 +
               overlap.total +
-              slotDistance * 0.35;
+              slotDistance * 0.18 +
+              Math.random() * 0.12;
 
             if (score < bestScore) {
               best = candidate;
               bestScore = score;
 
-              acceptable =
-                overlap.maximum <= allowedOverlap &&
-                overlap.total <= allowedOverlap * 2;
+
             }
           }
 
-          for (let attempt = 0; attempt < 40 && !acceptable; attempt++) {
+          for (let attempt = 0; attempt < 40; attempt++) {
             consider(
               centerX +
                 randomBetween(-jitterX / 2, jitterX / 2) -
@@ -2099,18 +2084,18 @@
             );
           }
 
-          for (let attempt = 0; attempt < 64 && !acceptable; attempt++) {
+          for (let attempt = 0; attempt < 180; attempt++) {
             consider(
               randomBetween(minX, maxX),
               randomBetween(minY, maxY)
             );
           }
 
-          for (let row = 0; row <= 8 && !acceptable; row++) {
-            for (let column = 0; column <= 8 && !acceptable; column++) {
+          for (let row = 0; row <= 8; row++) {
+            for (let column = 0; column <= 8; column++) {
               consider(
-                minX + ((maxX - minX) * column) / 8,
-                minY + ((maxY - minY) * row) / 8
+                minX + ((maxX - minX) * (column + Math.random())) / 9,
+                minY + ((maxY - minY) * (row + Math.random())) / 9
               );
             }
           }
@@ -2641,11 +2626,20 @@
 
     const records = new Map();
 
-    const formWrap = formStep?.querySelector(".w-form");
-    const form = formWrap?.querySelector("form");
+    const form = formStep?.querySelector("form");
+    const hubspot = !!form?.matches("[data-wf-hs-form]");
+    const formWrap = form?.closest(".w-form") || form?.parentElement;
     const success = formWrap?.querySelector(".w-form-done");
-    const failure = formWrap?.querySelector(".w-form-fail");
-    const formTarget = formWrap || formStep?.querySelector("form");
+    let failure = formWrap?.querySelector(".w-form-fail");
+    const formTarget = form?.closest(".w-form") || form;
+
+    if (hubspot) {
+      failure = document.createElement("div");
+      failure.className = "reception-form-error";
+      failure.setAttribute("role", "alert");
+      failure.style.cssText = "display:none;margin-top:1rem;";
+      form.appendChild(failure);
+    }
 
     let started = false;
     let ready = false;
@@ -2943,7 +2937,7 @@
 
       if (succeeded) {
         observer?.disconnect();
-        form.removeEventListener("submit", onSubmit, true);
+        if (!hubspot) form.removeEventListener("submit", onSubmit, true);
 
         timeline.call(() => {
           const record = records.get(formStep);
@@ -3012,8 +3006,58 @@
       scheduleResult();
     }
 
-    function onSubmit() {
+    async function submitHubSpot(data) {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 30000);
+      try {
+        // Preserve the integration's tracking fields and all submitted inputs.
+        const cookie = document.cookie.split(";").map(value => value.trim())
+          .find(value => value.startsWith("hubspotutk="));
+        if (data.has("hutk") && cookie) data.set("hutk", cookie.slice(11));
+        if (data.has("pageUri")) data.set("pageUri", window.location.href);
+        if (data.has("pageName")) data.set("pageName", document.title);
+        if (data.has("pageId")) data.set("pageId", window.location.pathname);
+
+        const response = await fetch(form.action, {
+          method: "POST",
+          body: data,
+          signal: controller.signal
+        });
+        const payload = await response.json();
+        const confirmed = payload && (
+          typeof payload.inlineMessage === "string" ||
+          typeof payload.redirectUri === "string" ||
+          payload.success === true
+        );
+        if (!response.ok || payload?.errors?.length ||
+            payload?.error || payload?.status === "error" ||
+            payload?.success === false || !confirmed) {
+          throw new Error("Submission was not confirmed");
+        }
+        result = "success";
+      } catch (error) {
+        result = "failure";
+        failure.textContent = error.name === "AbortError"
+          ? "Confirmation is taking too long. Your submission may have arrived. Please check your connection before trying again."
+          : "We couldn't confirm your submission. Please check your connection and try again.";
+        failure.style.display = "block";
+      } finally {
+        window.clearTimeout(timeout);
+        scheduleResult();
+      }
+    }
+
+    function onSubmit(event) {
+      if (hubspot) {
+        // Capture phase runs before the integration's bubbling submit handler.
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
       if (!ready || phase !== "idle") return;
+      if (hubspot && (!form.reportValidity() ||
+          form.querySelector('button[type="submit"]:disabled, input[type="submit"]:disabled'))) return;
+      const submission = hubspot ? new FormData(form) : null;
+      if (hubspot) failure.style.display = "none";
 
       ready = false;
       result = null;
@@ -3085,10 +3129,11 @@
         scheduleResult();
       });
 
-      // Webflow handles the actual form submission.
+      if (hubspot) void submitHubSpot(submission);
+      // Native Webflow forms retain their existing submission handler.
     }
 
-    if (form && success && failure && waveStep && finalStep) {
+    if (form && (hubspot || (success && failure)) && waveStep && finalStep) {
       const display = getComputedStyle(form).display;
 
       formWrap.style.setProperty(
@@ -3115,13 +3160,14 @@
 
       document.head.appendChild(style);
 
-      observer = new MutationObserver(observeResult);
-
-      for (const node of [success, failure]) {
-        observer.observe(node, {
-          attributes: true,
-          attributeFilter: ["style", "class", "hidden"]
-        });
+      if (!hubspot) {
+        observer = new MutationObserver(observeResult);
+        for (const node of [success, failure]) {
+          observer.observe(node, {
+            attributes: true,
+            attributeFilter: ["style", "class", "hidden"]
+          });
+        }
       }
 
       form.addEventListener("submit", onSubmit, true);
