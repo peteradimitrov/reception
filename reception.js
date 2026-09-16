@@ -191,10 +191,12 @@
         --slider-handle: 48px;
         --slider-inset: 3px;
         position: relative;
-        width: min(226px, calc(100vw - 40px));
-        height: 54px;
+        width: min(226px, calc(100vw - 40px)) !important;
+        height: 54px !important;
         box-sizing: border-box;
         border-radius: 999px;
+        max-width: 226px !important;
+        max-height: 54px !important;
         isolation: isolate;
         opacity: 0;
         visibility: hidden;
@@ -222,10 +224,12 @@
       .phone-slider > .phone-btn {
         position: absolute;
         inset: var(--slider-inset) auto auto var(--slider-inset);
-        width: var(--slider-handle);
-        height: var(--slider-handle);
-        min-width: 0;
-        min-height: 0;
+        width: var(--slider-handle) !important;
+        height: var(--slider-handle) !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        max-width: none !important;
+        max-height: none !important;
         padding: 0;
         margin: 0;
         display: grid;
@@ -241,8 +245,10 @@
         -webkit-tap-highlight-color: transparent;
       }
       .phone-slider > .phone-btn .icon-chip {
-        width: 100%;
-        height: 100%;
+        width: 100% !important;
+        height: 100% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
         box-sizing: border-box;
         display: grid;
         place-items: center;
@@ -610,12 +616,12 @@
       if (centerOnly) {
         const cx = origin.x + candidate.x + candidate.width / 2;
         const cy = origin.y + candidate.y + candidate.height / 2;
-        return zone.regions.some(region =>
+        const region = zone.regions[0];
+        return !!region &&
           cx >= region.left - clearance &&
           cx <= region.right + clearance &&
           cy >= region.top - clearance &&
-          cy <= region.bottom + clearance
-        );
+          cy <= region.bottom + clearance;
       }
 
       const rect = {
@@ -632,7 +638,7 @@
       });
     }
 
-    return { getRect, overlaps, getOrigin, blocksPlacement };
+    return { getRect, overlaps, getOrigin, blocksPlacement, invalidate };
   }
 
   function createSoundManager(options) {
@@ -3425,6 +3431,7 @@
 
     const sound = createSoundManager(SETTINGS.sound);
     const phoneZone = createPhoneZone(SETTINGS.phone);
+    phoneZone.invalidate();
     const trail = createTrail(SETTINGS.trail, phoneZone);
 
     const random = createRandomNotifications(
