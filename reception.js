@@ -188,23 +188,21 @@
     const style = document.createElement("style");
     style.textContent = `
       .phone-slider {
-        --slider-handle: 64px;
-        --slider-inset: 8px;
+        --slider-handle: 48px;
+        --slider-inset: 3px;
         position: relative;
-        width: min(320px, calc(100vw - 48px));
-        height: calc(var(--slider-handle) + var(--slider-inset) * 2);
+        width: min(226px, calc(100vw - 40px));
+        height: 54px;
         box-sizing: border-box;
         border-radius: 999px;
         isolation: isolate;
         opacity: 0;
         visibility: hidden;
         overflow: visible;
-        background:
-          radial-gradient(ellipse at 25% 0%, rgba(255,255,255,.13), transparent 65%),
-          linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-        -webkit-backdrop-filter: blur(24px) saturate(145%);
-        backdrop-filter: blur(24px) saturate(145%);
-        box-shadow: inset 0 1px 2px rgba(255,255,255,.1), 0 12px 32px rgba(0,0,0,.16);
+        background: #4b4b4b;
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        box-shadow: none;
         touch-action: pan-y;
       }
       .phone-slider::before {
@@ -250,7 +248,8 @@
         place-items: center;
         border-radius: 50%;
         color: #fff;
-        background: linear-gradient(145deg, rgba(83,229,119,.96), rgba(29,167,70,.96));
+        background: #19a847;
+        box-shadow: inset 0 1px 1px rgba(255,255,255,.24), 0 2px 6px rgba(0,0,0,.22);
         -webkit-backdrop-filter: blur(16px);
         backdrop-filter: blur(16px);
         box-shadow: inset 0 1px 1px rgba(255,255,255,.2), 0 3px 12px rgba(0,0,0,.18);
@@ -274,11 +273,11 @@
         justify-content: center;
         align-items: center;
         transform: none;
-        font-size: clamp(14px, 4vw, 17px);
-        line-height: 1.2;
-        font-weight: 500;
-        letter-spacing: .01em;
-        text-transform: none;
+        font-size: 14px;
+        line-height: 1;
+        font-weight: 700;
+        letter-spacing: .02em;
+        text-transform: uppercase;
         white-space: nowrap;
         color: #fff;
         pointer-events: none;
@@ -294,7 +293,9 @@
         white-space: nowrap;
         border: 0;
       }
-      @media (max-width: 359px) { .phone-slider { --slider-handle: 56px; } }
+      @media (max-width: 359px) {
+        .phone-slider { --slider-handle: 44px; width: min(210px, calc(100vw - 32px)); height: 50px; }
+      }
     `;
     document.head.appendChild(style);
     parent.insertBefore(track, button);
@@ -593,20 +594,42 @@
       };
     }
 
-    function blocksPlacement(candidate, origin, zone, moveDown = 0) {
-      return overlaps(
-        {
-          left: origin.x + candidate.x,
-          top: origin.y + candidate.y,
-          right: origin.x + candidate.x + candidate.width,
-          bottom:
-            origin.y +
-            candidate.y +
-            candidate.height +
-            Math.max(0, moveDown)
-        },
-        zone
-      );
+    function blocksPlacement(
+      candidate,
+      origin,
+      zone,
+      moveDown = 0,
+      centerOnly = false,
+      clearanceOverride = null
+    ) {
+      if (!zone) return false;
+      const clearance = clearanceOverride == null
+        ? zone.clearance
+        : Math.max(0, clearanceOverride);
+
+      if (centerOnly) {
+        const cx = origin.x + candidate.x + candidate.width / 2;
+        const cy = origin.y + candidate.y + candidate.height / 2;
+        return zone.regions.some(region =>
+          cx >= region.left - clearance &&
+          cx <= region.right + clearance &&
+          cy >= region.top - clearance &&
+          cy <= region.bottom + clearance
+        );
+      }
+
+      const rect = {
+        left: origin.x + candidate.x,
+        top: origin.y + candidate.y,
+        right: origin.x + candidate.x + candidate.width,
+        bottom: origin.y + candidate.y + candidate.height +
+          Math.max(0, moveDown)
+      };
+      return zone.regions.some(region => {
+        const dx = Math.max(region.left - rect.right, rect.left - region.right, 0);
+        const dy = Math.max(region.top - rect.bottom, rect.top - region.bottom, 0);
+        return Math.hypot(dx, dy) <= clearance;
+      });
     }
 
     return { getRect, overlaps, getOrigin, blocksPlacement };
@@ -1382,7 +1405,9 @@
         phoneZone.blocksPlacement(
           candidate,
           phoneZone.getOrigin(list),
-          phoneZone.getRect()
+          phoneZone.getRect(),
+          0,
+          true
         )
       ) return false;
 
@@ -1658,9 +1683,12 @@
           Math.floor((row * count) / rows);
 
         for (let column = 0; column < rowCount; column++) {
+          const baseX = (column + 0.5) / rowCount;
+          const baseY = (row + 0.5) / rows;
+          const drift = ((row * 0.61803398875) % 1 - 0.5) * 0.32;
           slots.push({
-            x: (column + 0.5) / rowCount,
-            y: (row + 0.5) / rows,
+            x: clamp(baseX + drift / Math.max(1, rowCount), 0.08, 0.92),
+            y: clamp(baseY + (((column * 0.381966) % 1) - 0.5) / Math.max(1, rows), 0.08, 0.92),
             width: 1 / rowCount,
             height: 1 / rows
           });
@@ -1834,7 +1862,9 @@
               candidate,
               origin,
               zone,
-              entranceMove
+              entranceMove,
+              false,
+              0
             )
           ) return;
 
@@ -2230,7 +2260,9 @@
           },
           phoneZone.getOrigin(list),
           phoneZone.getRect(),
-          entranceMove
+          entranceMove,
+          false,
+          0
         )
       ) {
         blocked.add(item);
