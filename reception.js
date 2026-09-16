@@ -266,7 +266,16 @@
         display: grid;
         place-items: center;
       }
-      .phone-slider > .phone-btn .icon { font-size: 30px; line-height: 1; }
+      .phone-slider > .phone-btn .icon {
+        display: block;
+        width: auto !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: 24px !important;
+        line-height: 1 !important;
+        transform: none !important;
+      }
       .phone-slider > .phone-btn:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
       .phone-slider .phone-slider__label {
         position: absolute;
@@ -591,6 +600,20 @@
       });
     }
 
+    function centerOverlaps(rect, zone = getRect(), clearanceOverride = null) {
+      if (!zone || !zone.regions.length) return false;
+      const region = zone.regions[0];
+      const clearance = clearanceOverride == null
+        ? zone.clearance
+        : Math.max(0, clearanceOverride);
+      const cx = (rect.left + rect.right) / 2;
+      const cy = (rect.top + rect.bottom) / 2;
+      return cx >= region.left - clearance &&
+        cx <= region.right + clearance &&
+        cy >= region.top - clearance &&
+        cy <= region.bottom + clearance;
+    }
+
     function getOrigin(list) {
       const rect = list.getBoundingClientRect();
 
@@ -638,7 +661,7 @@
       });
     }
 
-    return { getRect, overlaps, getOrigin, blocksPlacement, invalidate };
+    return { getRect, overlaps, centerOverlaps, getOrigin, blocksPlacement, invalidate };
   }
 
   function createSoundManager(options) {
@@ -1322,7 +1345,7 @@
       if (!zone) return;
 
       for (const item of [...visibleItems]) {
-        if (phoneZone.overlaps(item.getBoundingClientRect(), zone)) {
+        if (phoneZone.centerOverlaps(item.getBoundingClientRect(), zone)) {
           hideImmediately(item);
         }
       }
@@ -1381,7 +1404,7 @@
         overwrite: "auto",
 
         onUpdate() {
-          if (phoneZone.overlaps(item.getBoundingClientRect())) {
+          if (phoneZone.centerOverlaps(item.getBoundingClientRect())) {
             hideImmediately(item);
           }
         },
