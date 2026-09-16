@@ -510,12 +510,6 @@
 
   function createPhoneZone(options) {
     const button = select(".phone-btn");
-    const group = button?.closest("[data-phone-button]");
-    const titles = getPhoneTitles(button);
-
-    const label =
-      button?.parentElement?.querySelector(".phone-btn__label") ||
-      select(".phone-btn__label");
 
     let cachedFrame = -1;
     let cachedRect = null;
@@ -542,40 +536,17 @@
       cachedFrame = frame;
       cachedRect = null;
 
-      // Protect actual controls individually, leaving the gaps available.
-      const toggle = group?.querySelector(".reception-sound-toggle");
-      const controls = [button.closest(".phone-slider") || button, toggle, label];
-      const regions = controls.filter(Boolean)
-        .map(element => element.getBoundingClientRect())
-        .filter(rect => rect.width > 0 && rect.height > 0);
-
-      // Text ranges avoid reserving a heading's full block width.
-      for (const title of titles) {
-        const range = document.createRange();
-        range.selectNodeContents(title);
-        const textRects = Array.from(range.getClientRects())
-          .filter(rect => rect.width > 0 && rect.height > 0);
-        regions.push(...(textRects.length ? textRects : [title.getBoundingClientRect()]));
-      }
-      if (!regions.length) return null;
-
-      const radius = readPhoneNumber(
-        button,
-        "data-phone-radius",
-        options.proximityRadius,
-        1
-      );
+      // Protect only the slider, never the parent title/toggle wrapper.
+      const control = button.closest(".phone-slider") || button;
+      const rect = control.getBoundingClientRect();
+      if (!rect.width || !rect.height) return null;
 
       cachedRect = {
-        regions,
-        // Bounds are used only to park mobile overflow items off screen.
-        left: Math.min(...regions.map(rect => rect.left)),
-        right: Math.max(...regions.map(rect => rect.right)),
-        clearance: readPhoneNumber(
-          button,
-          "data-phone-clearance",
-          radius
-        )
+        regions: [rect],
+        left: rect.left,
+        right: rect.right,
+        // Read directly from the phone button. Zero means no extra padding.
+        clearance: readNumber(button, "data-phone-clearance", 52)
       };
 
       return cachedRect;
