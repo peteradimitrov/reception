@@ -432,8 +432,86 @@
     };
   }
 
+  function readPhoneNumber(button, attribute, fallback, minimum = 0) {
+    const group = button?.closest("[data-phone-button]");
+    return readNumber(group, attribute,
+      readNumber(button, attribute, fallback, minimum), minimum);
+  }
+
+  function getPhoneTitles(button) {
+    const group = button?.closest("[data-phone-button]");
+    if (!group) return [];
+    const marked = Array.from(group.querySelectorAll("[data-phone-title]"));
+    const candidates = (marked.length ? marked :
+      Array.from(group.querySelectorAll("h1,h2,h3,h4,h5,h6")))
+      .filter(title => !title.closest(".phone-slider, .phone-btn"));
+    return candidates.filter(title =>
+      !candidates.some(other => other !== title && other.contains(title)));
+  }
+
+  function createPhoneTitles(button) {
+    const titles = getPhoneTitles(button);
+    const options = SETTINGS.steps;
+    let stopped = false, started = false, animation = null;
+    let chars = [], splits = [];
+    gsap.set(titles, { autoAlpha: 0 });
+    titles.forEach(title => {
+      title.inert = true;
+      title.setAttribute("aria-hidden", "true");
+    });
+    return {
+      elements: titles,
+      async start() {
+        if (started || stopped || !titles.length) return;
+        started = true;
+        if (document.fonts) await document.fonts.ready;
+        if (stopped) return;
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        chars = titles.flatMap(title => {
+          if (reduced || !window.SplitText) return [title];
+          const split = new SplitText(title, {
+            type: "words,chars", charsClass: "ambient-char",
+            wordsClass: "ambient-word", aria: "auto"
+          });
+          splits.push(split);
+          return split.chars;
+        });
+        gsap.set(titles, { autoAlpha: 1 });
+        gsap.set(chars, {
+          autoAlpha: 0,
+          filter: `blur(${reduced ? 0 : options.blur}px)`,
+          scale: reduced ? 1 : options.scale,
+          transformOrigin: "50% 60%"
+        });
+        titles.forEach(title => {
+          title.inert = false;
+          title.removeAttribute("aria-hidden");
+        });
+        animation = gsap.to(chars, {
+          autoAlpha: 1, filter: "blur(0px)", scale: 1,
+          duration: reduced ? .2 : options.enter,
+          stagger: { each: reduced ? 0 : options.stagger, from: "start" },
+          ease: "power2.out"
+        });
+      },
+      stop() {
+        stopped = true;
+        animation?.kill();
+        gsap.killTweensOf(chars);
+        titles.forEach(title => { title.inert = true; });
+      },
+      finish() {
+        splits.forEach(split => split.revert());
+        splits = [];
+        titles.forEach(title => title.setAttribute("aria-hidden", "true"));
+      }
+    };
+  }
+
   function createPhoneZone(options) {
     const button = select(".phone-btn");
+    const group = button?.closest("[data-phone-button]");
+    const titles = getPhoneTitles(button);
 
     const label =
       button?.parentElement?.querySelector(".phone-btn__label") ||
@@ -464,10 +542,19 @@
       cachedFrame = frame;
       cachedRect = null;
 
-      const rect = (button.closest(".phone-slider") || button).getBoundingClientRect();
-      if (!rect.width || !rect.height) return null;
+      // Protect the full group, including any title extending outside it.
+      const regions = [group || button.closest(".phone-slider") || button, ...titles]
+        .map(element => element.getBoundingClientRect())
+        .filter(rect => rect.width > 0 && rect.height > 0);
+      if (!regions.length) return null;
+      const rect = {
+        left: Math.min(...regions.map(r => r.left)),
+        top: Math.min(...regions.map(r => r.top)),
+        right: Math.max(...regions.map(r => r.right)),
+        bottom: Math.max(...regions.map(r => r.bottom))
+      };
 
-      const radius = readNumber(
+      const radius = readPhoneNumber(
         button,
         "data-phone-radius",
         options.proximityRadius,
@@ -480,7 +567,7 @@
         right: rect.right,
         bottom: rect.bottom,
         label: label?.getBoundingClientRect(),
-        clearance: readNumber(
+        clearance: readPhoneNumber(
           button,
           "data-phone-clearance",
           radius
@@ -2223,7 +2310,12 @@
       items.forEach(item => observer.observe(item));
 
       const phone = select(".phone-btn");
-      if (phone) observer.observe(phone);
+      if (phone) {
+        observer.observe(phone);
+        const group = phone.closest("[data-phone-button]");
+        if (group) observer.observe(group);
+        getPhoneTitles(phone).forEach(title => observer.observe(title));
+      }
     }
 
     return {
@@ -2257,25 +2349,26 @@
     const button = select(".phone-btn");
     if (!button) return { start() {} };
     const track = button.closest(".phone-slider");
+    const titles = createPhoneTitles(button);
 
     const label =
       button.parentElement?.querySelector(".phone-btn__label") ||
       select(".phone-btn__label");
 
-    const delay = readNumber(
+    const delay = readPhoneNumber(
       button,
       "data-phone-delay",
       options.delay
     );
 
-    const radius = readNumber(
+    const radius = readPhoneNumber(
       button,
       "data-phone-radius",
       options.proximityRadius,
       1
     );
 
-    const fade = readNumber(
+    const fade = readPhoneNumber(
       button,
       "data-phone-volume-fade",
       options.volumeFade
@@ -2457,6 +2550,7 @@
         started = true;
 
         revealTimer = gsap.delayedCall(delay, () => {
+          titles.start();
           button.inert = false;
           button.removeAttribute("aria-hidden");
 
@@ -2496,6 +2590,7 @@
 
       stop() {
         visible = false;
+        titles.stop();
 
         events.abort();
         revealTimer?.kill();
@@ -2504,7 +2599,10 @@
         cancelAnimationFrame(frame);
 
         const phoneGroup = button.closest("[data-phone-button]");
-        const targets = track ? [track] : label ? [button, label] : [button];
+        const targets = [
+          ...(track ? [track] : label ? [button, label] : [button]),
+          ...titles.elements
+        ];
 
         gsap.killTweensOf(targets);
         button.inert = true;
@@ -2518,6 +2616,7 @@
           overwrite: true,
 
           onComplete() {
+            titles.finish();
             button.classList.remove("is-ringing");
             phoneGroup?.setAttribute("data-phone-picked-up", "");
           }
