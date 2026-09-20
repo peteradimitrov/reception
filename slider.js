@@ -12,11 +12,12 @@ function configureFocus(root, el, config, savedIndex) {
   // Webflow supplies an AVERAGE slot width, e.g. calc(100% / 3).
   // Read it before replacing Swiper's internal navigation-slot widths.
   const viewport = el.clientWidth;
-  const base = slides[0]?.getBoundingClientRect().width || viewport || 1;
+  const base = (slides[0] && parseFloat(getComputedStyle(slides[0]).width)) || viewport || 1;
   const capacity = Math.max(1, viewport / base);
   const large = viewport / (1 + (capacity - 1) * ratio);
   const small = large * ratio;
   slides.forEach(slide => { slide.style.width = `${large}px`; });
+  const layoutWidths = new WeakMap();
   // Lay out each card once at its small size; Webflow typography is the side-card baseline. Only transforms change on drag.
   slides.forEach(slide => {
     const card = slide.querySelector(':scope > .card--benefit');
@@ -24,13 +25,18 @@ function configureFocus(root, el, config, savedIndex) {
     card.style.setProperty('width', `${small}px`, 'important');
     card.style.setProperty('height', `${small / aspect}px`, 'important');
   });
+  slides.forEach(slide => {
+    const card = slide.querySelector(':scope > .card--benefit');
+    if (card) layoutWidths.set(card, parseFloat(getComputedStyle(card).width) || small);
+  });
+  const slotWidth = (slides[0] && parseFloat(getComputedStyle(slides[0]).width)) || large;
   const fits = large + (slides.length - 1) * small <= el.clientWidth + 2;
   // Conservative Swiper 11 auto-size loop budget, including centered loop buffers.
   const visibleSlots = Math.floor(viewport / Math.max(1, large)) + 1;
   const requiredForLoop = Math.max(visibleSlots + Math.ceil(visibleSlots / 2), Math.ceil(capacity - 0.01) + 2);
   const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
   const initial = fits ? Math.floor((slides.length - 1) / 2) : Math.min(savedIndex ?? 1, slides.length - 1);
-  root.dataset.focusVersion = '4';
+  root.dataset.focusVersion = '6';
   root.dataset.focusState = fits ? 'static' : canLoop ? 'loop' : 'finite';
   el.style.setProperty('--focus-height', `${large / aspect}px`);
   Object.assign(config, {
@@ -54,10 +60,13 @@ function configureFocus(root, el, config, savedIndex) {
     if (!swiper || swiper.destroyed || disposed) return;
     const items = Array.from(wrapper.children).filter(s => s.classList.contains('swiper-slide'));
     if (!items.length) return;
-    const transform = getComputedStyle(wrapper).transform;
-    const tx = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
-    const offsets = items.map(s => s.offsetLeft);
-    const centers = items.map((s,i) => offsets[i] + s.offsetWidth / 2 + tx);
+    // Fractional viewport coordinates, not integer-rounded offsetLeft/offsetWidth.
+    const viewportRect = el.getBoundingClientRect();
+    const rects = items.map(slide => slide.getBoundingClientRect());
+    const parentScale = rects[0].width / slotWidth;
+    if (!(parentScale > 0) || !(small > 0)) return;
+    const viewportLeft = viewportRect.left + el.clientLeft * parentScale;
+    const centers = rects.map(rect => (rect.left + rect.width/2 - viewportLeft) / parentScale);
     const mid = el.clientWidth / 2;
     let q = initial;
     if (!fits && items.length > 1) {
@@ -78,16 +87,28 @@ function configureFocus(root, el, config, savedIndex) {
       const b = lefts[k+1] + widths[k+1]/2;
       origin = mid - (a + (b-a)*t);
     }
-    // All reads are above; write packed card geometry together below.
+    // Quantize a SINGLE shared edge array. Adjacent cards use the same boundary.
+    // Account for pinch zoom in addition to the device pixel ratio when available.
+    const browserWindow = typeof window === 'undefined' ? null : window;
+    const visualViewport = browserWindow?.visualViewport;
+    const pixelRatio = Math.max(0.1, (browserWindow?.devicePixelRatio || 1) * (visualViewport?.scale || 1));
+    const viewportOffset = visualViewport?.offsetLeft || 0;
+    const snap = value => Math.round((value - viewportOffset) * pixelRatio) / pixelRatio + viewportOffset;
+    const edges = [...lefts, total].map(x => snap(viewportLeft + (origin + x) * parentScale));
     items.forEach((slide,i) => {
       const card = slide.querySelector(':scope > .card--benefit');
       if (!card) return;
       const w = widths[i], h = w/aspect;
-      const nextTransform = `translate3d(${origin + lefts[i] - offsets[i] - tx}px, ${(large/aspect-h)/2}px, 0) scale(${w / small})`;
-      // Avoid style writes while idle; also repair any externally overwritten transform.
+      const renderedWidth = (edges[i+1] - edges[i]) / parentScale;
+      const x = (edges[i] - rects[i].left) / parentScale;
+      const scaleX = renderedWidth / (layoutWidths.get(card) || small);
+      const scaleY = w / small;
+      const nextTransform = `translate3d(${x}px, ${(large/aspect-h)/2}px, 0) scale(${scaleX}, ${scaleY})`;
+      // No overlap or added width. Only subpixel horizontal rounding differs from uniform scale.
       if (card.style.transform !== nextTransform) card.style.transform = nextTransform;
     });
   }
+
   function wake(swiper) {
     if (disposed || raf || !pageVisible()) return;
     raf = requestAnimationFrame(function frame() {
