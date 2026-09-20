@@ -18,16 +18,17 @@ function configureFocus(root, el, config, savedIndex) {
   const small = large * ratio;
   slides.forEach(slide => { slide.style.width = `${large}px`; });
   const layoutWidths = new WeakMap();
-  // Lay out each card once at its small size; Webflow typography is the side-card baseline. Only transforms change on drag.
+  // Only text content scales. The card background/clip uses real dimensions.
   slides.forEach(slide => {
     const card = slide.querySelector(':scope > .card--benefit');
     if (!card) return;
-    card.style.setProperty('width', `${small}px`, 'important');
-    card.style.setProperty('height', `${small / aspect}px`, 'important');
-  });
-  slides.forEach(slide => {
-    const card = slide.querySelector(':scope > .card--benefit');
-    if (card) layoutWidths.set(card, parseFloat(getComputedStyle(card).width) || small);
+    card.style.setProperty('transform', 'none', 'important');
+    const body = card.querySelector(':scope > .card-body');
+    if (body) {
+      body.style.setProperty('width', `${small}px`, 'important');
+      body.style.setProperty('height', `${small / aspect}px`, 'important');
+      layoutWidths.set(body, parseFloat(getComputedStyle(body).width) || small);
+    }
   });
   const slotWidth = (slides[0] && parseFloat(getComputedStyle(slides[0]).width)) || large;
   const fits = large + (slides.length - 1) * small <= el.clientWidth + 2;
@@ -36,7 +37,7 @@ function configureFocus(root, el, config, savedIndex) {
   const requiredForLoop = Math.max(visibleSlots + Math.ceil(visibleSlots / 2), Math.ceil(capacity - 0.01) + 2);
   const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
   const initial = fits ? Math.floor((slides.length - 1) / 2) : Math.min(savedIndex ?? 1, slides.length - 1);
-  root.dataset.focusVersion = '6';
+  root.dataset.focusVersion = '7';
   root.dataset.focusState = fits ? 'static' : canLoop ? 'loop' : 'finite';
   el.style.setProperty('--focus-height', `${large / aspect}px`);
   Object.assign(config, {
@@ -101,11 +102,21 @@ function configureFocus(root, el, config, savedIndex) {
       const w = widths[i], h = w/aspect;
       const renderedWidth = (edges[i+1] - edges[i]) / parentScale;
       const x = (edges[i] - rects[i].left) / parentScale;
-      const scaleX = renderedWidth / (layoutWidths.get(card) || small);
-      const scaleY = w / small;
-      const nextTransform = `translate3d(${x}px, ${(large/aspect-h)/2}px, 0) scale(${scaleX}, ${scaleY})`;
-      // No overlap or added width. Only subpixel horizontal rounding differs from uniform scale.
-      if (card.style.transform !== nextTransform) card.style.transform = nextTransform;
+      // Layout the visible frame without any card-level scale or transform.
+      const set = (property, value) => {
+        if (card.style.getPropertyValue(property) !== value) card.style.setProperty(property, value, 'important');
+      };
+      set('left', `${x}px`);
+      set('top', `${(large/aspect-h)/2}px`);
+      set('width', `${renderedWidth}px`);
+      set('height', `${h}px`);
+      const body = card.querySelector(':scope > .card-body');
+      if (body) {
+        const scaleX = renderedWidth / (layoutWidths.get(body) || small);
+        const nextTransform = `scale(${scaleX}, ${w / small})`;
+        if (body.style.transform !== nextTransform) body.style.transform = nextTransform;
+      }
+
     });
   }
 
