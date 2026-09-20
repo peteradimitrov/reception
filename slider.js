@@ -9,14 +9,28 @@ function configureFocus(root, el, config, savedIndex) {
   const slides = Array.from(wrapper.children).filter(s => s.classList.contains('swiper-slide'));
   const ratio = Math.min(1, Math.max(0.1, parseFloat(root.getAttribute('data-focus-ratio')) || 416 / 610));
   const aspect = Math.max(0.1, parseFloat(root.getAttribute('data-focus-aspect')) || 610 / 696);
-  const large = slides[0]?.getBoundingClientRect().width || el.clientWidth;
+  // Webflow supplies an AVERAGE slot width, e.g. calc(100% / 3).
+  // Read it before replacing Swiper's internal navigation-slot widths.
+  const viewport = el.clientWidth;
+  const base = slides[0]?.getBoundingClientRect().width || viewport || 1;
+  const capacity = Math.max(1, viewport / base);
+  const large = viewport / (1 + (capacity - 1) * ratio);
   const small = large * ratio;
+  slides.forEach(slide => { slide.style.width = `${large}px`; });
+  // Lay out each card once at its active size. Only transforms change on drag.
+  slides.forEach(slide => {
+    const card = slide.querySelector(':scope > .card--benefit');
+    if (!card) return;
+    card.style.setProperty('width', `${large}px`, 'important');
+    card.style.setProperty('height', `${large / aspect}px`, 'important');
+  });
   const fits = large + (slides.length - 1) * small <= el.clientWidth + 2;
   // Conservative Swiper 11 auto-size loop budget, including centered loop buffers.
-  const visibleSlots = Math.floor(el.clientWidth / large) + 1;
-  const requiredForLoop = visibleSlots + Math.ceil(visibleSlots / 2);
+  const visibleSlots = Math.floor(viewport / Math.max(1, large)) + 1;
+  const requiredForLoop = Math.max(visibleSlots + Math.ceil(visibleSlots / 2), Math.ceil(capacity - 0.01) + 2);
   const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
   const initial = fits ? Math.floor((slides.length - 1) / 2) : Math.min(savedIndex ?? 1, slides.length - 1);
+  root.dataset.focusVersion = '2';
   root.dataset.focusState = fits ? 'static' : canLoop ? 'loop' : 'finite';
   el.style.setProperty('--focus-height', `${large / aspect}px`);
   Object.assign(config, {
@@ -64,9 +78,7 @@ function configureFocus(root, el, config, savedIndex) {
       const card = slide.querySelector(':scope > .card--benefit');
       if (!card) return;
       const w = widths[i], h = w/aspect;
-      card.style.setProperty('width', `${w}px`, 'important');
-      card.style.setProperty('height', `${h}px`, 'important');
-      card.style.transform = `translate3d(${origin + lefts[i] - offsets[i] - tx}px, ${(large/aspect-h)/2}px, 0)`;
+      card.style.transform = `translate3d(${origin + lefts[i] - offsets[i] - tx}px, ${(large/aspect-h)/2}px, 0) scale(${w / large})`;
     });
   }
   function wake(swiper) {
@@ -87,7 +99,10 @@ function configureFocus(root, el, config, savedIndex) {
     touchStart(swiper) { wake(swiper); },
     touchEnd(swiper) { until = performance.now() + swiper.params.speed + 80; wake(swiper); },
     transitionEnd(swiper) { wake(swiper); },
-    destroy() { disposed = true; cancelAnimationFrame(raf); }
+    destroy() {
+      disposed = true; cancelAnimationFrame(raf);
+      slides.forEach(slide => slide.style.removeProperty('width'));
+    }
   };
   return { fits };
 }
