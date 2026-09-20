@@ -17,12 +17,12 @@ function configureFocus(root, el, config, savedIndex) {
   const large = viewport / (1 + (capacity - 1) * ratio);
   const small = large * ratio;
   slides.forEach(slide => { slide.style.width = `${large}px`; });
-  // Lay out each card once at its active size. Only transforms change on drag.
+  // Lay out each card once at its small size; Webflow typography is the side-card baseline. Only transforms change on drag.
   slides.forEach(slide => {
     const card = slide.querySelector(':scope > .card--benefit');
     if (!card) return;
-    card.style.setProperty('width', `${large}px`, 'important');
-    card.style.setProperty('height', `${large / aspect}px`, 'important');
+    card.style.setProperty('width', `${small}px`, 'important');
+    card.style.setProperty('height', `${small / aspect}px`, 'important');
   });
   const fits = large + (slides.length - 1) * small <= el.clientWidth + 2;
   // Conservative Swiper 11 auto-size loop budget, including centered loop buffers.
@@ -30,7 +30,7 @@ function configureFocus(root, el, config, savedIndex) {
   const requiredForLoop = Math.max(visibleSlots + Math.ceil(visibleSlots / 2), Math.ceil(capacity - 0.01) + 2);
   const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
   const initial = fits ? Math.floor((slides.length - 1) / 2) : Math.min(savedIndex ?? 1, slides.length - 1);
-  root.dataset.focusVersion = '2';
+  root.dataset.focusVersion = '3';
   root.dataset.focusState = fits ? 'static' : canLoop ? 'loop' : 'finite';
   el.style.setProperty('--focus-height', `${large / aspect}px`);
   Object.assign(config, {
@@ -78,7 +78,7 @@ function configureFocus(root, el, config, savedIndex) {
       const card = slide.querySelector(':scope > .card--benefit');
       if (!card) return;
       const w = widths[i], h = w/aspect;
-      card.style.transform = `translate3d(${origin + lefts[i] - offsets[i] - tx}px, ${(large/aspect-h)/2}px, 0) scale(${w / large})`;
+      card.style.transform = `translate3d(${origin + lefts[i] - offsets[i] - tx}px, ${(large/aspect-h)/2}px, 0) scale(${w / small})`;
     });
   }
   function wake(swiper) {
