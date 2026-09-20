@@ -1,0 +1,493 @@
+function initGlobalSliders() {
+  (function () {
+    function numberWithZero(n){ return n < 10 ? "0"+n : String(n); }
+    function clamp01(x){ return x < 0 ? 0 : (x > 1 ? 1 : x); }
+
+// Focus renderer: horizontal LTR, equal responsive slide widths, Swiper 11.
+function configureFocus(root, el, config, savedIndex) {
+  const wrapper = el.querySelector('.swiper-wrapper');
+  const slides = Array.from(wrapper.children).filter(s => s.classList.contains('swiper-slide'));
+  const ratio = Math.min(1, Math.max(0.1, parseFloat(root.getAttribute('data-focus-ratio')) || 416 / 610));
+  const aspect = Math.max(0.1, parseFloat(root.getAttribute('data-focus-aspect')) || 610 / 696);
+  const large = slides[0]?.getBoundingClientRect().width || el.clientWidth;
+  const small = large * ratio;
+  const fits = large + (slides.length - 1) * small <= el.clientWidth + 2;
+  // Conservative Swiper 11 auto-size loop budget, including centered loop buffers.
+  const visibleSlots = Math.floor(el.clientWidth / large) + 1;
+  const requiredForLoop = visibleSlots + Math.ceil(visibleSlots / 2);
+  const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
+  const initial = fits ? Math.floor((slides.length - 1) / 2) : Math.min(savedIndex ?? 1, slides.length - 1);
+  root.dataset.focusState = fits ? 'static' : canLoop ? 'loop' : 'finite';
+  el.style.setProperty('--focus-height', `${large / aspect}px`);
+  Object.assign(config, {
+    effect: 'slide', slidesPerView: 'auto', slidesPerGroup: 1,
+    centeredSlides: true, centeredSlidesBounds: false,
+    spaceBetween: 0, watchSlidesProgress: true, watchOverflow: false,
+    loop: canLoop, loopAddBlankSlides: false, rewind: false,
+    initialSlide: Math.max(0, initial), enabled: !fits,
+    allowTouchMove: !fits && root.getAttribute('data-drag') !== 'false',
+    slideToClickedSlide: false, // visual cards do not share their outer slot positions
+    autoplay: fits ? false : config.autoplay,
+    resizeObserver: false, updateOnWindowResize: false
+  });
+  let raf = 0, until = 0, disposed = false;
+  function draw(swiper) {
+    if (!swiper || swiper.destroyed || disposed) return;
+    const items = Array.from(wrapper.children).filter(s => s.classList.contains('swiper-slide'));
+    if (!items.length) return;
+    const transform = getComputedStyle(wrapper).transform;
+    const tx = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
+    const offsets = items.map(s => s.offsetLeft);
+    const centers = items.map((s,i) => offsets[i] + s.offsetWidth / 2 + tx);
+    const mid = el.clientWidth / 2;
+    let q = initial;
+    if (!fits && items.length > 1) {
+      let k = 0;
+      while (k < items.length - 2 && centers[k+1] < mid) k++;
+      q = k + (mid - centers[k]) / Math.max(1, centers[k+1] - centers[k]);
+    }
+    const widths = items.map((_,i) => small + (large-small) * Math.max(0, 1-Math.abs(i-q)));
+    const lefts = []; let total = 0;
+    widths.forEach(w => { lefts.push(total); total += w; });
+    let origin;
+    if (fits) origin = (el.clientWidth - total) / 2;
+    else if (items.length === 1) origin = mid - widths[0]/2;
+    else {
+      const k = Math.max(0, Math.min(items.length-2, Math.floor(q)));
+      const t = q-k;
+      const a = lefts[k] + widths[k]/2;
+      const b = lefts[k+1] + widths[k+1]/2;
+      origin = mid - (a + (b-a)*t);
+    }
+    // All reads are above; write packed card geometry together below.
+    items.forEach((slide,i) => {
+      const card = slide.querySelector(':scope > .card--benefit');
+      if (!card) return;
+      const w = widths[i], h = w/aspect;
+      card.style.setProperty('width', `${w}px`, 'important');
+      card.style.setProperty('height', `${h}px`, 'important');
+      card.style.transform = `translate3d(${origin + lefts[i] - offsets[i] - tx}px, ${(large/aspect-h)/2}px, 0)`;
+    });
+  }
+  function wake(swiper) {
+    if (disposed || raf) return;
+    raf = requestAnimationFrame(function frame() {
+      raf = 0;
+      draw(swiper);
+      if (!disposed && !swiper.destroyed && (performance.now() < until || swiper.animating || swiper.touchEventsData?.isTouched)) {
+        raf = requestAnimationFrame(frame);
+      }
+    });
+  }
+  config.on = {
+    init(swiper) { draw(swiper); wake(swiper); },
+    setTranslate(swiper) { wake(swiper); },
+    setTransition(swiper, duration) { until = performance.now() + duration + 80; wake(swiper); },
+    loopFix(swiper) { wake(swiper); },
+    touchStart(swiper) { wake(swiper); },
+    touchEnd(swiper) { until = performance.now() + swiper.params.speed + 80; wake(swiper); },
+    transitionEnd(swiper) { wake(swiper); },
+    destroy() { disposed = true; cancelAnimationFrame(raf); }
+  };
+  return { fits };
+}
+
+    $(".swiper-slider").each(function () {
+      const $root = $(this);
+      let currentInstance = null, currentThumbs = null;
+      const isFocusRoot = ($root.attr("data-effect") || "").toLowerCase() === "focus";
+      function build(savedIndex) {
+
+      // ----- elements -----
+      const mainEl   = $root.find(".swiper").not(".swiper_new--thumbs")[0];
+      const thumbsEl = $root.find(".swiper_new--thumbs")[0];
+      if (!mainEl) return;
+
+      // ----- attributes -----
+      const loopMode        = $root.attr("loop-mode") === "true";
+      const sliderDuration  = $root.attr("slider-duration") !== undefined ? +$root.attr("slider-duration") : 300;
+      const isZeroSpeed     = sliderDuration <= 0;
+
+      const paginationType  = ($root.attr("data-pagination-type") || "progressbar").toLowerCase(); // bullets|progressbar|fraction|none
+      const autoplayEnabled = ($root.attr("data-autoplay") || "false").toLowerCase() === "true";
+      const autoplayDelay   = $root.attr("data-autoplay-delay") !== undefined ? +$root.attr("data-autoplay-delay") : 4000;
+      const pauseOnHover    = ($root.attr("data-autoplay-pause-hover") || "false").toLowerCase() === "true";
+
+      const effect          = ($root.attr("data-effect") || "slide").toLowerCase(); // slide|fade
+      const crossFade       = ($root.attr("data-effect-crossfade") || "true").toLowerCase() === "true";
+
+      const bulletProgress  = ($root.attr("data-bullet-progress") || "false").toLowerCase() === "true";
+      const thumbsEnabled   = ($root.attr("data-thumbs") || "false").toLowerCase() === "true";
+      const rewindEnabled   = ($root.attr("data-rewind") || "false").toLowerCase() === "true";
+
+      // Image scale
+      const scaleAnimEnabled = ($root.attr("data-scale-anim") || "false").toLowerCase() === "true";
+      const scaleTargetSel   = $root.attr("data-scale-target") || ".swiper-scale-target";
+      const scaleFrom        = parseFloat($root.attr("data-scale-from") || "1");
+      const scaleTo          = parseFloat($root.attr("data-scale-to")   || "1.05");
+
+      // ----- counts UI -----
+      const totalSlides = numberWithZero($(mainEl).find(".swiper-slide").length);
+      $root.find(".swiper-slider__count--total").text(totalSlides);
+
+      // ----- pagination config -----
+      let paginationConfig = false;
+
+      if (paginationType === "progressbar") {
+        const el = $root.find(".swiper-pagination-progressbar")[0];
+        if (el) paginationConfig = {
+          el,
+          type: "progressbar",
+          clickable: true,
+          bulletClass: "swiper-bullet",
+          bulletActiveClass: "is-active",
+          bulletElement: "button"
+        };
+      } else if (paginationType === "bullets") {
+        const el = $root.find(".swiper-pagination, .swiper-bullets, .swiper-bullet-wrapper").get(0);
+        if (el) {
+          paginationConfig = {
+            el,
+            type: "bullets",
+            clickable: true,
+            bulletClass: "swiper-bullet",
+            bulletActiveClass: "is-active",
+            bulletElement: "button",
+            ...(bulletProgress ? {
+              renderBullet: (i, className) =>
+                `<button class="${className}" aria-label="Go to slide ${i + 1}">
+                  <span class="swiper-bullet__progress"></span>
+                </button>`
+            } : {})
+          };
+        }
+      } else if (paginationType === "fraction") {
+        const el = $root.find(".swiper-pagination-fraction")[0];
+        if (el) paginationConfig = {
+          el,
+          type: "fraction",
+          formatFractionCurrent: n => numberWithZero(n),
+          formatFractionTotal: n => numberWithZero(n)
+        };
+      }
+
+      // ----- main swiper config -----
+      const config = {
+        speed: Math.max(0, sliderDuration),
+        loop: loopMode,
+        autoHeight: false,
+        centeredSlides: loopMode,
+        followFinger: true,
+        freeMode: false,
+        slideToClickedSlide: false,
+        slidesPerView: "auto",
+        rewind: !loopMode && rewindEnabled,
+
+        autoplay: autoplayEnabled ? {
+          delay: autoplayDelay,
+          disableOnInteraction: false,
+          pauseOnMouseEnter: pauseOnHover,
+          waitForTransition: !isZeroSpeed
+        } : false,
+
+        mousewheel: { forceToAxis: true },
+        keyboard: { enabled: true, onlyInViewport: true },
+
+        pagination: paginationConfig,
+
+        navigation: {
+          nextEl: $root.find(".swiper-slider__arrow--next")[0],
+          prevEl: $root.find(".swiper-slider__arrow--prev")[0],
+          disabledClass: "is-disabled"
+        },
+
+        scrollbar: {
+          el: $root.find(".swiper-drag-wrapper")[0],
+          draggable: true,
+          dragClass: "swiper-drag",
+          snapOnRelease: true
+        },
+
+        slideActiveClass: "is-active",
+        slideDuplicateActiveClass: "is-active"
+      };
+
+      if (effect === "fade") {
+        Object.assign(config, {
+          effect: "fade",
+          slidesPerView: 1,
+          spaceBetween: 0,
+          centeredSlides: false,
+          fadeEffect: { crossFade }
+        });
+      } else {
+        Object.assign(config, { effect: "slide" });
+      }
+
+      // ----- thumbs (click-only) -----
+      let thumbsSwiper = null;
+      if (thumbsEnabled && thumbsEl) {
+        thumbsSwiper = new Swiper(thumbsEl, {
+          loop: false,
+          slidesPerView: "auto",
+          watchSlidesProgress: true,
+          slideToClickedSlide: true,
+          allowTouchMove: false,
+          mousewheel: false,
+          keyboard: { enabled: false }
+        });
+        config.thumbs = { swiper: thumbsSwiper };
+      }
+
+      // ----- optional focus renderer -----
+      const focus = effect === "focus" ? configureFocus($root[0], mainEl, config, savedIndex) : null;
+      // ----- init main -----
+      const swiper = new Swiper(mainEl, config);
+      currentInstance = swiper;
+      currentThumbs = thumbsSwiper;
+
+      // ----- current counter -----
+      const updateCurrent = () => {
+        $root.find(".swiper-slider__count--current").text(numberWithZero(swiper.realIndex + 1));
+      };
+      swiper.on("slideChange", updateCurrent);
+      updateCurrent();
+
+      // ----- STORY-STYLE bullet progress -----
+      if (paginationType === "bullets" && bulletProgress && autoplayEnabled) {
+        const bullets = Array.from($root.find(".swiper-bullet"));
+        const fills   = bullets.map(b => b.querySelector(".swiper-bullet__progress"));
+
+        const setCumulative = (target) => {
+          for (let i = 0; i < fills.length; i++) {
+            const f = fills[i];
+            if (!f) continue;
+            f.style.transform = i < target ? "scaleX(1)" : "scaleX(0)";
+          }
+        };
+
+        setCumulative(swiper.realIndex);
+        swiper.on("slideChange", () => setCumulative(swiper.realIndex));
+
+        let lastIdx = -1, lastVal = -1;
+        swiper.on("autoplayTimeLeft", (_s, timeLeftMs) => {
+          const idx = swiper.realIndex;
+          const f = fills[idx];
+          if (!f) return;
+
+          const val = clamp01(1 - (timeLeftMs / autoplayDelay));
+          if (idx !== lastIdx) {
+            lastIdx = idx;
+            lastVal = -1;
+          }
+          if (Math.abs(val - lastVal) > 0.002) {
+            f.style.transform = `scaleX(${val})`;
+            lastVal = val;
+          }
+        });
+
+        swiper.on("autoplayStop", () => {
+          const f = fills[swiper.realIndex];
+          if (f) f.style.transform = "scaleX(1)";
+        });
+      }
+
+      // ===== PER-SLIDE AUTOPLAY PROGRESS (inside each slide) =====
+      (function setupPerSlideProgress(){
+        const slideEls = Array.from(mainEl.querySelectorAll(".swiper-slide"));
+        const hasReal  = slideEls.some(s => s.hasAttribute("data-swiper-slide-index"));
+
+        const barsByKey = new Map();
+        const allWraps = [];
+
+        for (let i = 0; i < slideEls.length; i++) {
+          const slide = slideEls[i];
+          const key = hasReal ? +slide.getAttribute("data-swiper-slide-index") : i;
+          const wrap = slide.querySelector(".swiper-progress");
+          const bar  = slide.querySelector(".swiper-progress__bar");
+
+          if (wrap) allWraps.push(wrap);
+          if (!bar) continue;
+
+          if (!barsByKey.has(key)) barsByKey.set(key, []);
+          barsByKey.get(key).push(bar);
+        }
+
+        if (!autoplayEnabled) {
+          for (let i = 0; i < allWraps.length; i++) allWraps[i].style.display = "none";
+          return;
+        } else {
+          for (let i = 0; i < allWraps.length; i++) allWraps[i].style.display = "";
+        }
+
+        const realTotal =
+          mainEl.querySelectorAll(".swiper-slide:not(.swiper-slide-duplicate)").length ||
+          slideEls.length;
+
+        const setBarsScale = (key, val) => {
+          const arr = barsByKey.get(key) || [];
+          for (let i = 0; i < arr.length; i++) {
+            const el = arr[i];
+            el.style.transformOrigin = "left";
+            el.style.transform = `scaleX(${val})`;
+          }
+        };
+
+        const resetAllBars = () => {
+          for (const key of barsByKey.keys()) setBarsScale(key, 0);
+        };
+
+        for (const key of barsByKey.keys()) setBarsScale(key, 0);
+
+        let prevReal = swiper.realIndex;
+        setBarsScale(prevReal, 0);
+
+        const isForward = (prev, curr) => (curr === (prev + 1) % realTotal);
+        const isRewindJump = (prev, curr) => {
+          if (!rewindEnabled) return false;
+          return (prev === realTotal - 1 && curr === 0) || (prev === 0 && curr === realTotal - 1);
+        };
+
+        swiper.on("slideChange", () => {
+          const curr = swiper.realIndex;
+          const prev = prevReal;
+
+          if (isRewindJump(prev, curr)) {
+            resetAllBars();
+            setBarsScale(curr, 0);
+            prevReal = curr;
+            return;
+          }
+
+          setBarsScale(curr, 0);
+
+          if (isForward(prev, curr)) {
+            setBarsScale(prev, 1);
+          } else {
+            setBarsScale(prev, 0);
+          }
+
+          prevReal = curr;
+        });
+
+        swiper.on("autoplayTimeLeft", (_s, timeLeftMs) => {
+          const curr = swiper.realIndex;
+          const partial = clamp01(1 - (timeLeftMs / autoplayDelay));
+          setBarsScale(curr, partial);
+        });
+
+        swiper.on("autoplayStop", () => {
+          const curr = swiper.realIndex;
+          setBarsScale(curr, 1);
+        });
+      })();
+
+      // ----- IMAGE SCALE synced to autoplay -----
+      if (scaleAnimEnabled && autoplayEnabled) {
+        const qAll = (el) => el ? el.querySelectorAll(scaleTargetSel) : [];
+        const setScale = (nodes, s) => { nodes.forEach(t => { t.style.transform = `scale(${s})`; }); };
+
+        $(mainEl).find(".swiper-slide").each((_, el) => setScale(qAll(el), scaleFrom));
+        setScale(qAll(swiper.slides[swiper.activeIndex]), scaleFrom);
+
+        swiper.on("slideChange", () => {
+          const currEl = swiper.slides[swiper.activeIndex];
+          if (currEl) setScale(qAll(currEl), scaleFrom);
+        });
+
+        const endReset = () => {
+          $(mainEl).find(".swiper-slide").each((_, el) => {
+            if (!el.classList.contains(swiper.params.slideActiveClass)) setScale(qAll(el), scaleFrom);
+          });
+        };
+
+        if (isZeroSpeed) {
+          swiper.on("slideChange", endReset);
+        } else {
+          swiper.on("slideChangeTransitionEnd", endReset);
+        }
+
+        swiper.on("autoplayTimeLeft", (_s, timeLeftMs) => {
+          const p = clamp01(1 - (timeLeftMs / autoplayDelay));
+          const currEl = swiper.slides[swiper.activeIndex];
+          if (!currEl) return;
+          const value = scaleFrom + (scaleTo - scaleFrom) * p;
+          qAll(currEl).forEach(t => { t.style.transform = `scale(${value})`; });
+        });
+
+        swiper.on("autoplayStop", () => {
+          const currEl = swiper.slides[swiper.activeIndex];
+          if (currEl) setScale(qAll(currEl), scaleTo);
+        });
+      }
+
+      // ===== AUTOPLAY PAUSES/RESUMES WITH VIEWPORT =====
+      if (autoplayEnabled && swiper.autoplay && !(focus && focus.fits)) {
+        let hasStarted = false;
+
+        const startOrResume = () => {
+          try {
+            if (!hasStarted) {
+              swiper.autoplay.start();
+              hasStarted = true;
+            } else {
+              swiper.autoplay.resume();
+            }
+          } catch (e) {}
+        };
+
+        const pauseAutoplay = () => {
+          try {
+            swiper.autoplay.pause();
+          } catch (e) {}
+        };
+
+        try { swiper.autoplay.stop(); } catch (e) {}
+
+        const io = new IntersectionObserver((entries) => {
+          for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            if (entry.isIntersecting) {
+              startOrResume();
+            } else {
+              pauseAutoplay();
+            }
+          }
+        }, { threshold: 0.25 });
+
+        io.observe($root[0]);
+        swiper.on("destroy", () => io.disconnect());
+      }
+      } // build
+      build();
+      if (isFocusRoot) {
+        let timer, previousWidth = $root[0].getBoundingClientRect().width;
+        let previousWindowWidth = window.innerWidth;
+        const refresh = () => {
+          const width = $root[0].getBoundingClientRect().width;
+          if (Math.abs(width-previousWidth) < 0.5 && window.innerWidth === previousWindowWidth) return;
+          previousWidth = width;
+          previousWindowWidth = window.innerWidth;
+          clearTimeout(timer);
+          timer = setTimeout(() => {
+            const index = currentInstance && !currentInstance.destroyed ? currentInstance.realIndex : 1;
+            if (currentInstance && !currentInstance.destroyed) currentInstance.destroy(true, true);
+            if (currentThumbs && !currentThumbs.destroyed) currentThumbs.destroy(true, true);
+            build(index);
+          }, 150);
+        };
+        const observer = new ResizeObserver(refresh);
+        observer.observe($root[0]);
+        window.addEventListener("resize", refresh);
+        // Optional cleanup for a page-transition system.
+        $root[0].destroyGlobalSlider = () => {
+          clearTimeout(timer); observer.disconnect(); window.removeEventListener("resize", refresh);
+          if (currentInstance && !currentInstance.destroyed) currentInstance.destroy(true, true);
+          if (currentThumbs && !currentThumbs.destroyed) currentThumbs.destroy(true, true);
+        };
+      }
+    });
+  })();
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initGlobalSliders);
+else initGlobalSliders();
