@@ -30,7 +30,7 @@ function configureFocus(root, el, config, savedIndex) {
   const requiredForLoop = Math.max(visibleSlots + Math.ceil(visibleSlots / 2), Math.ceil(capacity - 0.01) + 2);
   const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
   const initial = fits ? Math.floor((slides.length - 1) / 2) : Math.min(savedIndex ?? 1, slides.length - 1);
-  root.dataset.focusVersion = '3';
+  root.dataset.focusVersion = '4';
   root.dataset.focusState = fits ? 'static' : canLoop ? 'loop' : 'finite';
   el.style.setProperty('--focus-height', `${large / aspect}px`);
   Object.assign(config, {
@@ -45,6 +45,11 @@ function configureFocus(root, el, config, savedIndex) {
     resizeObserver: false, updateOnWindowResize: false
   });
   let raf = 0, until = 0, disposed = false;
+  let inView = true, visibilityObserver = null, liveSwiper = null;
+  const pageVisible = () => typeof document === 'undefined' || !document.hidden;
+  const resume = () => {
+    if (liveSwiper && pageVisible()) wake(liveSwiper);
+  };
   function draw(swiper) {
     if (!swiper || swiper.destroyed || disposed) return;
     const items = Array.from(wrapper.children).filter(s => s.classList.contains('swiper-slide'));
@@ -78,29 +83,52 @@ function configureFocus(root, el, config, savedIndex) {
       const card = slide.querySelector(':scope > .card--benefit');
       if (!card) return;
       const w = widths[i], h = w/aspect;
-      card.style.transform = `translate3d(${origin + lefts[i] - offsets[i] - tx}px, ${(large/aspect-h)/2}px, 0) scale(${w / small})`;
+      const nextTransform = `translate3d(${origin + lefts[i] - offsets[i] - tx}px, ${(large/aspect-h)/2}px, 0) scale(${w / small})`;
+      // Avoid style writes while idle; also repair any externally overwritten transform.
+      if (card.style.transform !== nextTransform) card.style.transform = nextTransform;
     });
   }
   function wake(swiper) {
-    if (disposed || raf) return;
+    if (disposed || raf || !pageVisible()) return;
     raf = requestAnimationFrame(function frame() {
       raf = 0;
       draw(swiper);
-      if (!disposed && !swiper.destroyed && (performance.now() < until || swiper.animating || swiper.touchEventsData?.isTouched)) {
+      if (!disposed && !swiper.destroyed && pageVisible() && (inView || performance.now() < until || swiper.animating || swiper.touchEventsData?.isTouched)) {
         raf = requestAnimationFrame(frame);
       }
     });
   }
   config.on = {
-    init(swiper) { draw(swiper); wake(swiper); },
+    init(swiper) {
+      liveSwiper = swiper;
+      draw(swiper); wake(swiper);
+      if (!visibilityObserver && typeof IntersectionObserver !== 'undefined') {
+        visibilityObserver = new IntersectionObserver(entries => {
+          inView = entries.some(entry => entry.isIntersecting);
+          if (inView) resume();
+        }, { rootMargin: '200px' });
+        visibilityObserver.observe(el);
+        document.addEventListener('visibilitychange', resume);
+        window.addEventListener('pageshow', resume);
+      }
+    },
     setTranslate(swiper) { wake(swiper); },
     setTransition(swiper, duration) { until = performance.now() + duration + 80; wake(swiper); },
-    loopFix(swiper) { wake(swiper); },
+    loopFix(swiper) { draw(swiper); wake(swiper); },
+    update(swiper) { wake(swiper); },
+    observerUpdate(swiper) { wake(swiper); },
+    slidesUpdated(swiper) { wake(swiper); },
     touchStart(swiper) { wake(swiper); },
     touchEnd(swiper) { until = performance.now() + swiper.params.speed + 80; wake(swiper); },
     transitionEnd(swiper) { wake(swiper); },
     destroy() {
       disposed = true; cancelAnimationFrame(raf);
+      if (visibilityObserver) {
+        visibilityObserver.disconnect();
+        document.removeEventListener('visibilitychange', resume);
+        window.removeEventListener('pageshow', resume);
+      }
+      liveSwiper = null;
       slides.forEach(slide => slide.style.removeProperty('width'));
     }
   };
@@ -476,10 +504,11 @@ function configureFocus(root, el, config, savedIndex) {
       } // build
       build();
       if (isFocusRoot) {
-        let timer, previousWidth = $root[0].getBoundingClientRect().width;
+        const viewportEl = $root.find(".swiper").not(".swiper_new--thumbs")[0];
+        let timer, previousWidth = viewportEl.clientWidth;
         let previousWindowWidth = window.innerWidth;
         const refresh = () => {
-          const width = $root[0].getBoundingClientRect().width;
+          const width = viewportEl.clientWidth;
           if (Math.abs(width-previousWidth) < 0.5 && window.innerWidth === previousWindowWidth) return;
           previousWidth = width;
           previousWindowWidth = window.innerWidth;
@@ -492,7 +521,7 @@ function configureFocus(root, el, config, savedIndex) {
           }, 150);
         };
         const observer = new ResizeObserver(refresh);
-        observer.observe($root[0]);
+        observer.observe(viewportEl);
         window.addEventListener("resize", refresh);
         // Optional cleanup for a page-transition system.
         $root[0].destroyGlobalSlider = () => {
