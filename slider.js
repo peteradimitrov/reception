@@ -16,6 +16,11 @@ function configureFocus(root, el, config, savedIndex) {
   const capacity = Math.max(1, viewport / base);
   const large = viewport / (1 + (capacity - 1) * ratio);
   const small = large * ratio;
+  const breakpointValue = Number(root.getAttribute('data-focus-mobile-breakpoint') ?? 767);
+  const mobileBreakpoint = Number.isFinite(breakpointValue) && breakpointValue >= 0 ? breakpointValue : 767;
+  const mobileText = typeof window !== 'undefined' && window.matchMedia(`(max-width: ${mobileBreakpoint}px)`).matches;
+  // Mobile: active text matches Webflow. Desktop: side text matches Webflow.
+  const textBase = mobileText ? large : small;
   slides.forEach(slide => { slide.style.width = `${large}px`; });
   const layoutWidths = new WeakMap();
   // Only text content scales. The card background/clip uses real dimensions.
@@ -25,9 +30,9 @@ function configureFocus(root, el, config, savedIndex) {
     card.style.setProperty('transform', 'none', 'important');
     const body = card.querySelector(':scope > .card-body');
     if (body) {
-      body.style.setProperty('width', `${small}px`, 'important');
-      body.style.setProperty('height', `${small / aspect}px`, 'important');
-      layoutWidths.set(body, parseFloat(getComputedStyle(body).width) || small);
+      body.style.setProperty('width', `${textBase}px`, 'important');
+      body.style.setProperty('height', `${textBase / aspect}px`, 'important');
+      layoutWidths.set(body, parseFloat(getComputedStyle(body).width) || textBase);
     }
   });
   const slotWidth = (slides[0] && parseFloat(getComputedStyle(slides[0]).width)) || large;
@@ -37,7 +42,8 @@ function configureFocus(root, el, config, savedIndex) {
   const requiredForLoop = Math.max(visibleSlots + Math.ceil(visibleSlots / 2), Math.ceil(capacity - 0.01) + 2);
   const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
   const initial = fits ? Math.floor((slides.length - 1) / 2) : Math.min(savedIndex ?? 1, slides.length - 1);
-  root.dataset.focusVersion = '7';
+  root.dataset.focusVersion = '8';
+  root.dataset.focusTextBaseline = mobileText ? 'active' : 'side';
   root.dataset.focusState = fits ? 'static' : canLoop ? 'loop' : 'finite';
   el.style.setProperty('--focus-height', `${large / aspect}px`);
   Object.assign(config, {
@@ -112,8 +118,8 @@ function configureFocus(root, el, config, savedIndex) {
       set('height', `${h}px`);
       const body = card.querySelector(':scope > .card-body');
       if (body) {
-        const scaleX = renderedWidth / (layoutWidths.get(body) || small);
-        const nextTransform = `scale(${scaleX}, ${w / small})`;
+        const scaleX = renderedWidth / (layoutWidths.get(body) || textBase);
+        const nextTransform = `scale(${scaleX}, ${w / textBase})`;
         if (body.style.transform !== nextTransform) body.style.transform = nextTransform;
       }
 
