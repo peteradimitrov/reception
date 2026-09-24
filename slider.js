@@ -25,10 +25,10 @@ function configureFocus(root, el, config, savedIndex) {
   const layoutWidths = new WeakMap();
   // Only text content scales. The card background/clip uses real dimensions.
   slides.forEach(slide => {
-    const card = slide.querySelector(':scope > .card--benefit');
+    const card = slide.querySelector(':scope > :is(.card--benefit, .card_new--benefit)');
     if (!card) return;
     card.style.setProperty('transform', 'none', 'important');
-    const body = card.querySelector(':scope > .card-body');
+    const body = card.querySelector(':scope > :is(.card-body, .card-body_new)');
     if (body) {
       body.style.setProperty('width', `${textBase}px`, 'important');
       body.style.setProperty('height', `${textBase / aspect}px`, 'important');
@@ -42,7 +42,7 @@ function configureFocus(root, el, config, savedIndex) {
   const requiredForLoop = Math.max(visibleSlots + Math.ceil(visibleSlots / 2), Math.ceil(capacity - 0.01) + 2);
   const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
   const initial = fits ? Math.floor((slides.length - 1) / 2) : Math.min(savedIndex ?? 1, slides.length - 1);
-  root.dataset.focusVersion = '8';
+  root.dataset.focusVersion = '9';
   root.dataset.focusTextBaseline = mobileText ? 'active' : 'side';
   root.dataset.focusState = fits ? 'static' : canLoop ? 'loop' : 'finite';
   el.style.setProperty('--focus-height', `${large / aspect}px`);
@@ -103,7 +103,7 @@ function configureFocus(root, el, config, savedIndex) {
     const snap = value => Math.round((value - viewportOffset) * pixelRatio) / pixelRatio + viewportOffset;
     const edges = [...lefts, total].map(x => snap(viewportLeft + (origin + x) * parentScale));
     items.forEach((slide,i) => {
-      const card = slide.querySelector(':scope > .card--benefit');
+      const card = slide.querySelector(':scope > :is(.card--benefit, .card_new--benefit)');
       if (!card) return;
       const w = widths[i], h = w/aspect;
       const renderedWidth = (edges[i+1] - edges[i]) / parentScale;
@@ -116,7 +116,7 @@ function configureFocus(root, el, config, savedIndex) {
       set('top', `${(large/aspect-h)/2}px`);
       set('width', `${renderedWidth}px`);
       set('height', `${h}px`);
-      const body = card.querySelector(':scope > .card-body');
+      const body = card.querySelector(':scope > :is(.card-body, .card-body_new)');
       if (body) {
         const scaleX = renderedWidth / (layoutWidths.get(body) || textBase);
         const nextTransform = `scale(${scaleX}, ${w / textBase})`;
