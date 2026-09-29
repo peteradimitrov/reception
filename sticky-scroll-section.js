@@ -23,8 +23,21 @@
 
         if (!track || !pin || !items.length) return;
 
-        var timedMode =
+        var tabsEnabled =
           section.getAttribute('data-scroll-mode') === 'tabs';
+
+        var configuredMinWidth = Number(
+          section.getAttribute('data-scroll-min-width')
+        );
+
+        var minWidth =
+          Number.isFinite(configuredMinWidth) && configuredMinWidth >= 0
+            ? configuredMinWidth
+            : 0;
+
+        var breakpoint = window.matchMedia(
+          '(min-width: ' + minWidth + 'px)'
+        );
 
         var configuredDuration = Number(
           section.getAttribute('data-scroll-duration')
@@ -44,7 +57,12 @@
         });
 
         var activeIndex = -1;
-        var updatePending = false;
+        var mode = null;
+        var scrollFrame = null;
+
+        var elapsed = 0;
+        var lastTime = null;
+        var timerFrame = null;
 
         function animateDescription(description, isOpen, immediate) {
           if (!description) return;
@@ -97,8 +115,8 @@
           });
         }
 
-        function setActive(index) {
-          if (index === activeIndex) return;
+        function setActive(index, immediate) {
+          if (index === activeIndex && !immediate) return;
 
           var previousIndex = activeIndex;
           var initial = previousIndex === -1;
@@ -118,11 +136,11 @@
               }
             }
 
-            if (initial || i === previousIndex || active) {
+            if (initial || immediate || i === previousIndex || active) {
               animateDescription(
                 descriptions[i],
                 active,
-                initial
+                initial || immediate
               );
             }
           });
@@ -148,7 +166,9 @@
           };
         }
 
-        function updateScroll() {
+        function updateScroll(immediate) {
+          if (mode !== 'scroll') return;
+
           var metrics = getMetrics();
           var scrolled = window.scrollY - metrics.start;
 
@@ -168,23 +188,46 @@
             item.style.setProperty('--progress', progress);
           });
 
-          setActive(index);
-          updatePending = false;
+          setActive(index, immediate);
         }
 
         function requestScrollUpdate() {
-          if (updatePending) return;
+          if (mode !== 'scroll' || scrollFrame !== null) return;
 
-          updatePending = true;
-          window.requestAnimationFrame(updateScroll);
+          scrollFrame = window.requestAnimationFrame(function () {
+            scrollFrame = null;
+            updateScroll(false);
+          });
         }
 
         /* Timed mode */
 
-        var elapsed = 0;
-        var lastTime = null;
-        var timerFrame = null;
-        var inView = false;
+        function isVisible() {
+          var rect = pin.getBoundingClientRect();
+
+          return rect.width > 0 &&
+            rect.height > 0 &&
+            rect.bottom > 0 &&
+            rect.top < window.innerHeight &&
+            rect.right > 0 &&
+            rect.left < window.innerWidth;
+        }
+
+        function canPlay() {
+          return mode === 'tabs' &&
+            items.length > 1 &&
+            !document.hidden &&
+            isVisible();
+        }
+
+        function stopTimer() {
+          if (timerFrame !== null) {
+            window.cancelAnimationFrame(timerFrame);
+            timerFrame = null;
+          }
+
+          lastTime = null;
+        }
 
         function renderTimedProgress() {
           items.forEach(function (item, i) {
@@ -197,26 +240,15 @@
           });
         }
 
-        function canPlay() {
-          return timedMode &&
-            items.length > 1 &&
-            inView &&
-            !document.hidden;
-        }
-
         function syncPlayback() {
-          if (canPlay()) {
-            if (timerFrame === null) {
-              lastTime = null;
-              timerFrame = window.requestAnimationFrame(tick);
-            }
-          } else {
-            if (timerFrame !== null) {
-              window.cancelAnimationFrame(timerFrame);
-              timerFrame = null;
-            }
+          if (!canPlay()) {
+            stopTimer();
+            return;
+          }
 
+          if (timerFrame === null) {
             lastTime = null;
+            timerFrame = window.requestAnimationFrame(tick);
           }
         }
 
@@ -236,7 +268,7 @@
 
           if (elapsed >= duration) {
             elapsed = 0;
-            setActive((activeIndex + 1) % items.length);
+            setActive((activeIndex + 1) % items.length, false);
           }
 
           renderTimedProgress();
@@ -247,12 +279,44 @@
           elapsed = 0;
           lastTime = null;
 
-          setActive(index);
+          setActive(index, false);
           renderTimedProgress();
           syncPlayback();
         }
 
-        /* Button clicks */
+        /* Switch modes when the breakpoint changes */
+
+        function applyMode() {
+          var nextMode =
+            tabsEnabled && breakpoint.matches ? 'tabs' : 'scroll';
+
+          if (nextMode === mode) return;
+
+          stopTimer();
+
+          if (scrollFrame !== null) {
+            window.cancelAnimationFrame(scrollFrame);
+            scrollFrame = null;
+          }
+
+          mode = nextMode;
+          elapsed = 0;
+
+          // CSS reads this attribute to enable/disable sticky layout.
+          section.setAttribute('data-scroll-active-mode', mode);
+
+          if (mode === 'tabs') {
+            // Keep the current item when entering timed mode.
+            setActive(activeIndex >= 0 ? activeIndex : 0, true);
+            renderTimedProgress();
+            syncPlayback();
+          } else {
+            // In scroll mode, the current scroll position selects the item.
+            updateScroll(true);
+          }
+        }
+
+        /* Item clicks */
 
         triggers.forEach(function (trigger, index) {
           if (!trigger) return;
@@ -260,19 +324,18 @@
           trigger.type = 'button';
 
           trigger.addEventListener('click', function () {
-            if (timedMode) {
+            if (mode === 'tabs') {
               selectTimedItem(index);
               return;
             }
 
             var metrics = getMetrics();
-
             if (metrics.distance <= 0) return;
 
             var itemDistance = metrics.distance / items.length;
             var target = metrics.start + itemDistance * index;
 
-            // Avoid landing before the boundary due to pixel rounding.
+            // Avoid rounding into the previous item's interval.
             target += Math.min(1, itemDistance / 2);
 
             window.scrollTo({
@@ -282,10 +345,39 @@
           });
         });
 
-        /* Apply reduced-motion changes to description animations. */
+        /* Shared events */
+
+        window.addEventListener('scroll', function () {
+          if (mode === 'tabs') {
+            syncPlayback();
+          } else {
+            requestScrollUpdate();
+          }
+        }, { passive: true });
+
+        window.addEventListener('resize', function () {
+          applyMode();
+
+          if (mode === 'tabs') {
+            syncPlayback();
+          } else {
+            requestScrollUpdate();
+          }
+        });
+
+        window.addEventListener('load', function () {
+          if (mode === 'tabs') {
+            syncPlayback();
+          } else {
+            requestScrollUpdate();
+          }
+        });
+
+        document.addEventListener('visibilitychange', syncPlayback);
+        breakpoint.addEventListener('change', applyMode);
 
         reducedMotion.addEventListener('change', function () {
-          if (!reducedMotion.matches) return;
+          if (!reducedMotion.matches || activeIndex < 0) return;
 
           descriptions.forEach(function (description, i) {
             animateDescription(
@@ -296,51 +388,22 @@
           });
         });
 
-        /* Initialize the selected mode. */
-
-        if (timedMode) {
-          setActive(0);
-          renderTimedProgress();
-
-          if (items.length > 1) {
-            document.addEventListener(
-              'visibilitychange',
-              syncPlayback
-            );
-
-            if ('IntersectionObserver' in window) {
-              var observer = new IntersectionObserver(
-                function (entries) {
-                  inView = entries[0].isIntersecting;
-                  syncPlayback();
-                },
-                { threshold: 0 }
-              );
-
-              observer.observe(pin);
-            } else {
-              inView = true;
-              syncPlayback();
-            }
-          }
-        } else {
-          window.addEventListener('scroll', requestScrollUpdate, {
-            passive: true
+        // Detect visibility changes caused by surrounding layout changes.
+        if ('IntersectionObserver' in window) {
+          var observer = new IntersectionObserver(function () {
+            if (mode === 'tabs') syncPlayback();
           });
 
-          window.addEventListener('resize', requestScrollUpdate);
-          window.addEventListener('load', requestScrollUpdate);
-
-          updateScroll();
+          observer.observe(pin);
         }
+
+        applyMode();
       }
     );
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, {
-      once: true
-    });
+    document.addEventListener('DOMContentLoaded', init, { once: true });
   } else {
     init();
   }
