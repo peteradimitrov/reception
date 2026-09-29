@@ -9,7 +9,6 @@
         var track = section.querySelector('[data-scroll-track]');
         var pin = section.querySelector('[data-scroll-pin]');
 
-        // Exclude items belonging to any nested scroll section.
         function belongsToSection(element) {
           return element.closest('[data-scroll-section]') === section;
         }
@@ -31,10 +30,10 @@
           section.getAttribute('data-scroll-duration')
         );
 
-        var duration = Number.isFinite(configuredDuration) &&
-          configuredDuration > 0
-          ? configuredDuration
-          : 5000;
+        var duration =
+          Number.isFinite(configuredDuration) && configuredDuration > 0
+            ? configuredDuration
+            : 5000;
 
         var triggers = items.map(function (item) {
           return item.querySelector('button');
@@ -73,6 +72,7 @@
           if (isOpen) {
             description.style.display = 'block';
             description.style.height = 'auto';
+
             targetHeight =
               description.getBoundingClientRect().height;
           }
@@ -102,6 +102,7 @@
 
           var previousIndex = activeIndex;
           var initial = previousIndex === -1;
+
           activeIndex = index;
 
           items.forEach(function (item, i) {
@@ -118,7 +119,11 @@
             }
 
             if (initial || i === previousIndex || active) {
-              animateDescription(descriptions[i], active, initial);
+              animateDescription(
+                descriptions[i],
+                active,
+                initial
+              );
             }
           });
 
@@ -126,6 +131,8 @@
             image.classList.toggle('is-active', i === index);
           });
         }
+
+        /* Scroll-driven mode */
 
         function getMetrics() {
           var rect = track.getBoundingClientRect();
@@ -167,23 +174,17 @@
 
         function requestScrollUpdate() {
           if (updatePending) return;
+
           updatePending = true;
           window.requestAnimationFrame(updateScroll);
         }
 
-        /*
-         * Timed-mode state.
-         * Pause while offscreen, in a hidden browser tab,
-         * hovered, or while keyboard focus is inside the section.
-         */
+        /* Timed mode */
+
         var elapsed = 0;
         var lastTime = null;
         var timerFrame = null;
         var inView = false;
-        var hovered = false;
-        var focused = section.contains(document.activeElement);
-        var manuallyPaused = reducedMotion.matches;
-        var pauseButton = null;
 
         function renderTimedProgress() {
           items.forEach(function (item, i) {
@@ -200,18 +201,7 @@
           return timedMode &&
             items.length > 1 &&
             inView &&
-            !document.hidden &&
-            !hovered &&
-            !focused &&
-            !manuallyPaused;
-        }
-
-        function updatePauseButton() {
-          if (!pauseButton) return;
-
-          pauseButton.textContent = manuallyPaused
-            ? 'Play automatic changes'
-            : 'Pause automatic changes';
+            !document.hidden;
         }
 
         function syncPlayback() {
@@ -256,10 +246,13 @@
         function selectTimedItem(index) {
           elapsed = 0;
           lastTime = null;
+
           setActive(index);
           renderTimedProgress();
           syncPlayback();
         }
+
+        /* Button clicks */
 
         triggers.forEach(function (trigger, index) {
           if (!trigger) return;
@@ -273,11 +266,13 @@
             }
 
             var metrics = getMetrics();
+
             if (metrics.distance <= 0) return;
 
             var itemDistance = metrics.distance / items.length;
             var target = metrics.start + itemDistance * index;
 
+            // Avoid landing before the boundary due to pixel rounding.
             target += Math.min(1, itemDistance / 2);
 
             window.scrollTo({
@@ -287,69 +282,31 @@
           });
         });
 
+        /* Apply reduced-motion changes to description animations. */
+
+        reducedMotion.addEventListener('change', function () {
+          if (!reducedMotion.matches) return;
+
+          descriptions.forEach(function (description, i) {
+            animateDescription(
+              description,
+              i === activeIndex,
+              true
+            );
+          });
+        });
+
+        /* Initialize the selected mode. */
+
         if (timedMode) {
           setActive(0);
           renderTimedProgress();
 
           if (items.length > 1) {
-            pauseButton = section.querySelector('[data-scroll-pause]');
-
-            if (!pauseButton) {
-              pauseButton = document.createElement('button');
-              pauseButton.setAttribute('data-scroll-pause', '');
-              pin.appendChild(pauseButton);
-            }
-
-            pauseButton.type = 'button';
-            updatePauseButton();
-
-            pauseButton.addEventListener('click', function () {
-              manuallyPaused = !manuallyPaused;
-              updatePauseButton();
-              syncPlayback();
-            });
-
-            section.addEventListener('pointerenter', function (event) {
-              if (event.pointerType !== 'mouse') return;
-              hovered = true;
-              syncPlayback();
-            });
-
-            section.addEventListener('pointerleave', function (event) {
-              if (event.pointerType !== 'mouse') return;
-              hovered = false;
-              syncPlayback();
-            });
-
-            section.addEventListener('focusin', function () {
-              focused = true;
-              syncPlayback();
-            });
-
-            section.addEventListener('focusout', function () {
-              window.setTimeout(function () {
-                focused = section.contains(document.activeElement);
-                syncPlayback();
-              }, 0);
-            });
-
-            document.addEventListener('visibilitychange', syncPlayback);
-
-            reducedMotion.addEventListener('change', function () {
-              if (reducedMotion.matches) {
-                manuallyPaused = true;
-                updatePauseButton();
-                syncPlayback();
-
-                descriptions.forEach(function (description, i) {
-                  animateDescription(
-                    description,
-                    i === activeIndex,
-                    true
-                  );
-                });
-              }
-            });
+            document.addEventListener(
+              'visibilitychange',
+              syncPlayback
+            );
 
             if ('IntersectionObserver' in window) {
               var observer = new IntersectionObserver(
@@ -370,6 +327,7 @@
           window.addEventListener('scroll', requestScrollUpdate, {
             passive: true
           });
+
           window.addEventListener('resize', requestScrollUpdate);
           window.addEventListener('load', requestScrollUpdate);
 
@@ -380,7 +338,9 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once: true });
+    document.addEventListener('DOMContentLoaded', init, {
+      once: true
+    });
   } else {
     init();
   }
