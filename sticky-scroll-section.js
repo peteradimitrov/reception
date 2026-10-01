@@ -37,6 +37,10 @@
             : fallback;
         }
 
+        function clamp(value, min, max) {
+          return Math.min(Math.max(value, min), max);
+        }
+
         var tabsEnabled =
           section.getAttribute('data-scroll-mode') === 'tabs';
 
@@ -47,7 +51,6 @@
         var duration = positiveNumber('data-scroll-duration', 5000);
         var scrollDistance = positiveNumber('data-scroll-distance', 300);
 
-        // Every item gets a full scroll interval.
         var hybridDistance = items.length > 1
           ? items.length * scrollDistance
           : 0;
@@ -75,16 +78,19 @@
         var mode = null;
         var activeIndex = -1;
         var scrollFrame = null;
+        var pendingManualScroll = false;
 
         var elapsed = 0;
         var lastTime = null;
         var timerFrame = null;
-
         var lastHybridHeight = null;
 
-        function clamp(value, min, max) {
-          return Math.min(Math.max(value, min), max);
-        }
+        var scrolling = false;
+        var scrollEndTimeout = null;
+        var lastObservedY = window.scrollY;
+
+        // Resume timed progress after this brief scroll-idle period.
+        var scrollIdleDelay = 120;
 
         /* Description animation */
 
@@ -146,7 +152,6 @@
 
           var previousIndex = activeIndex;
           var initial = previousIndex === -1;
-
           activeIndex = index;
 
           items.forEach(function (item, i) {
@@ -178,7 +183,7 @@
           sizeHybridTrack();
         }
 
-        /* Automatic track height for combined mode */
+        /* Track sizing and measurements */
 
         function sizeHybridTrack() {
           if (mode !== 'hybrid') return;
@@ -194,8 +199,6 @@
             );
           }
         }
-
-        /* Track measurements */
 
         function getMetrics() {
           var rect = track.getBoundingClientRect();
@@ -229,10 +232,10 @@
             rect.left < window.innerWidth;
         }
 
-        function isInsideTrack(metrics, scrollY) {
+        function isInsideTrack(metrics) {
           return metrics.distance > 0 &&
-            scrollY >= metrics.start - 1 &&
-            scrollY <= metrics.end + 1;
+            window.scrollY >= metrics.start - 1 &&
+            window.scrollY <= metrics.end + 1;
         }
 
         /* Original scroll-driven mode */
@@ -241,10 +244,13 @@
           if (mode !== 'scroll') return;
 
           var metrics = getMetrics();
-          var scrolled = window.scrollY - metrics.start;
 
           var overall = metrics.distance > 0
-            ? clamp(scrolled / metrics.distance, 0, 1)
+            ? clamp(
+                (window.scrollY - metrics.start) / metrics.distance,
+                0,
+                1
+              )
             : 0;
 
           var raw = overall * items.length;
@@ -262,15 +268,13 @@
           setActive(index, immediate);
         }
 
-        /* Shared timer */
+        /* Timed progress */
 
         function renderTimedProgress() {
           items.forEach(function (item, i) {
             item.style.setProperty(
               '--progress',
-              i === activeIndex
-                ? Math.min(elapsed / duration, 1)
-                : 0
+              i === activeIndex ? clamp(elapsed / duration, 0, 1) : 0
             );
           });
         }
@@ -291,8 +295,8 @@
 
         function canPlay() {
           if (
-            mode === 'scroll' ||
             !mode ||
+            mode === 'scroll' ||
             items.length < 2 ||
             document.hidden ||
             !isVisible()
@@ -301,7 +305,9 @@
           }
 
           if (mode === 'hybrid') {
-            return isInsideTrack(getMetrics(), window.scrollY);
+            return !scrolling &&
+              !pendingManualScroll &&
+              isInsideTrack(getMetrics());
           }
 
           return true;
@@ -334,12 +340,7 @@
           lastTime = time;
 
           if (elapsed >= duration) {
-            var nextIndex = (activeIndex + 1) % items.length;
-
-            // Also aligns the scroll position in hybrid mode.
-            selectTimedItem(nextIndex);
-
-            // selectTimedItem schedules the next frame.
+            selectTimedItem((activeIndex + 1) % items.length);
             return;
           }
 
@@ -347,10 +348,28 @@
           timerFrame = window.requestAnimationFrame(tick);
         }
 
-        /* Click and automatic selection */
+        /* Clear pending scroll work before programmatic selection */
+
+        function clearScrollActivity() {
+          if (scrollEndTimeout !== null) {
+            window.clearTimeout(scrollEndTimeout);
+            scrollEndTimeout = null;
+          }
+
+          if (scrollFrame !== null) {
+            window.cancelAnimationFrame(scrollFrame);
+            scrollFrame = null;
+          }
+
+          scrolling = false;
+          pendingManualScroll = false;
+        }
+
+        /* Clicks and automatic changes */
 
         function selectTimedItem(index) {
           stopTimer();
+          clearScrollActivity();
           resetTimer();
 
           setActive(index, false);
@@ -362,9 +381,11 @@
             var metrics = getMetrics();
 
             if (metrics.distance > 0) {
-              // Place the selected item in the middle of its interval.
-              var target =
-                metrics.start + (index + 0.5) * scrollDistance;
+              // Start the selected item's interval.
+              // Round upward to avoid landing in the previous interval.
+              var target = Math.ceil(
+                metrics.start + index * scrollDistance
+              );
 
               window.scrollTo({
                 top: Math.max(0, target),
@@ -373,12 +394,14 @@
             }
           }
 
+          // The resulting scroll event must not overwrite the timer.
+          lastObservedY = window.scrollY;
           syncPlayback();
         }
 
-        /* Combined mode: select by position within the track */
+        /* Hybrid mode: convert scroll position into elapsed time */
 
-        function updateHybridScroll(immediate) {
+        function updateHybridScroll(immediate, followScroll) {
           var metrics = getMetrics();
 
           if (metrics.distance <= 0) {
@@ -394,36 +417,101 @@
             metrics.distance
           );
 
-          var nextIndex = Math.min(
+          var index = Math.min(
             Math.floor(position / scrollDistance),
             items.length - 1
           );
 
-          if (nextIndex !== activeIndex || immediate) {
-            resetTimer();
-            setActive(nextIndex, immediate);
-            renderTimedProgress();
+          var progress = clamp(
+            (position - index * scrollDistance) / scrollDistance,
+            0,
+            1
+          );
+
+          var changed = index !== activeIndex;
+
+          setActive(index, immediate);
+
+          // Manual scrolling controls elapsed time.
+          // Ordinary refreshes preserve timed progress unless
+          // the layout places the page in a different item.
+          if (followScroll || immediate || changed) {
+            elapsed = progress * duration;
+            lastTime = null;
           }
 
+          renderTimedProgress();
           syncPlayback();
         }
 
-        /* Process scrolling once per frame */
+        /* Batch layout/scroll updates */
 
-        function requestScrollUpdate() {
+        function requestUpdate(manualScroll) {
+          if (manualScroll) {
+            pendingManualScroll = true;
+          }
+
           if (scrollFrame !== null) return;
 
           scrollFrame = window.requestAnimationFrame(function () {
             scrollFrame = null;
 
+            var followScroll = pendingManualScroll;
+            pendingManualScroll = false;
+
             if (mode === 'scroll') {
               updateScroll(false);
             } else if (mode === 'hybrid') {
-              updateHybridScroll(false);
+              updateHybridScroll(false, followScroll);
             } else {
               syncPlayback();
             }
           });
+        }
+
+        function handleScroll() {
+          var currentY = window.scrollY;
+          var moved = Math.abs(currentY - lastObservedY) > 0.01;
+
+          lastObservedY = currentY;
+
+          if (mode !== 'hybrid') {
+            requestUpdate(false);
+            return;
+          }
+
+          // Ignore the event from our own instant scrollTo().
+          if (!moved) return;
+
+          scrolling = true;
+          stopTimer();
+
+          if (scrollEndTimeout !== null) {
+            window.clearTimeout(scrollEndTimeout);
+          }
+
+          requestUpdate(true);
+
+          scrollEndTimeout = window.setTimeout(function () {
+            scrollEndTimeout = null;
+
+            if (mode !== 'hybrid') {
+              scrolling = false;
+              return;
+            }
+
+            // Apply the final scroll position before restarting time.
+            if (scrollFrame !== null) {
+              window.cancelAnimationFrame(scrollFrame);
+              scrollFrame = null;
+            }
+
+            pendingManualScroll = false;
+            updateHybridScroll(false, true);
+
+            scrolling = false;
+            syncPlayback();
+          }, scrollIdleDelay);
         }
 
         /* Responsive mode selection */
@@ -438,14 +526,10 @@
           if (nextMode === mode) return;
 
           stopTimer();
-
-          if (scrollFrame !== null) {
-            window.cancelAnimationFrame(scrollFrame);
-            scrollFrame = null;
-          }
+          clearScrollActivity();
+          resetTimer();
 
           mode = nextMode;
-          resetTimer();
           lastHybridHeight = null;
 
           section.setAttribute('data-scroll-active-mode', mode);
@@ -454,12 +538,14 @@
             updateScroll(true);
           } else if (mode === 'hybrid') {
             sizeHybridTrack();
-            updateHybridScroll(true);
+            updateHybridScroll(true, true);
           } else {
             setActive(activeIndex >= 0 ? activeIndex : 0, true);
             renderTimedProgress();
             syncPlayback();
           }
+
+          lastObservedY = window.scrollY;
         }
 
         /* Item buttons */
@@ -492,19 +578,19 @@
 
         /* Events */
 
-        window.addEventListener('scroll', requestScrollUpdate, {
+        window.addEventListener('scroll', handleScroll, {
           passive: true
         });
 
         window.addEventListener('resize', function () {
           applyMode();
           sizeHybridTrack();
-          requestScrollUpdate();
+          requestUpdate(false);
         });
 
         window.addEventListener('load', function () {
           sizeHybridTrack();
-          requestScrollUpdate();
+          requestUpdate(false);
         });
 
         document.addEventListener('visibilitychange', function () {
