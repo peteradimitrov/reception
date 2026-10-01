@@ -31,6 +31,7 @@
 
         function positiveNumber(attribute, fallback) {
           var value = Number(section.getAttribute(attribute));
+
           return Number.isFinite(value) && value > 0
             ? value
             : fallback;
@@ -140,6 +141,7 @@
 
           var previousIndex = activeIndex;
           var initial = previousIndex === -1;
+
           activeIndex = index;
 
           items.forEach(function (item, i) {
@@ -177,6 +179,7 @@
             parseFloat(window.getComputedStyle(pin).top) || 0;
 
           var start = window.scrollY + rect.top - stickyTop;
+
           var distance = Math.max(
             track.offsetHeight - window.innerHeight + stickyTop,
             0
@@ -271,8 +274,6 @@
             return false;
           }
 
-          // Hybrid mode advances automatically only within
-          // the track's active scroll range.
           if (mode === 'hybrid') {
             return isInsideTrack(getMetrics(), window.scrollY);
           }
@@ -318,38 +319,63 @@
           timerFrame = window.requestAnimationFrame(tick);
         }
 
+        /* Click selection in timed and hybrid modes */
+
         function selectTimedItem(index) {
+          stopTimer();
           resetTimer();
           accumulatedScroll = 0;
-          lastScrollY = window.scrollY;
 
           setActive(index, false);
           renderTimedProgress();
+
+          if (mode === 'hybrid') {
+            var metrics = getMetrics();
+
+            if (metrics.distance > 0) {
+              var target =
+                metrics.start + index * scrollDistance + 1;
+
+              window.scrollTo({
+                top: Math.max(
+                  0,
+                  Math.min(target, metrics.end)
+                ),
+                behavior: 'instant'
+              });
+            }
+          }
+
+          // Do not count the programmatic move as user scrolling.
+          lastScrollY = window.scrollY;
+
           syncPlayback();
         }
 
-        /* Hybrid mode: actual scroll distance changes items */
+        /* Hybrid mode: scroll distance changes items */
 
         function updateHybridScroll() {
           var currentY = window.scrollY;
           var previousY = lastScrollY;
+
           lastScrollY = currentY;
 
           var metrics = getMetrics();
 
-          if (!isInsideTrack(metrics, currentY)) {
+          if (metrics.distance <= 0) {
             accumulatedScroll = 0;
             syncPlayback();
             return;
           }
 
-          // Count only movement inside the active track range.
+          // Include movement through the start/end boundary,
+          // even when the final position is outside the track.
           var delta =
             clamp(currentY, metrics.start, metrics.end) -
             clamp(previousY, metrics.start, metrics.end);
 
           if (delta !== 0) {
-            // Changing direction starts a fresh distance count.
+            // Reversing direction starts a fresh distance count.
             if (
               accumulatedScroll !== 0 &&
               Math.sign(delta) !== Math.sign(accumulatedScroll)
@@ -378,6 +404,10 @@
                 renderTimedProgress();
               }
             }
+          }
+
+          if (!isInsideTrack(metrics, currentY)) {
+            accumulatedScroll = 0;
           }
 
           syncPlayback();
@@ -436,7 +466,7 @@
           syncPlayback();
         }
 
-        /* Item clicks */
+        /* Item buttons */
 
         triggers.forEach(function (trigger, index) {
           if (!trigger) return;
@@ -473,8 +503,6 @@
         window.addEventListener('resize', function () {
           applyMode();
 
-          // Reset distance measurement for genuine width changes,
-          // without interrupting description animations.
           if (window.innerWidth !== lastViewportWidth) {
             lastViewportWidth = window.innerWidth;
             accumulatedScroll = 0;
