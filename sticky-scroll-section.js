@@ -47,6 +47,11 @@
         var duration = positiveNumber('data-scroll-duration', 5000);
         var scrollDistance = positiveNumber('data-scroll-distance', 300);
 
+        var hybridDistance = Math.max(
+          0,
+          (items.length - 1) * scrollDistance
+        );
+
         var breakpoint = window.matchMedia(
           '(min-width: ' + minWidth + 'px)'
         );
@@ -78,6 +83,7 @@
         var accumulatedScroll = 0;
         var lastScrollY = window.scrollY;
         var lastViewportWidth = window.innerWidth;
+        var lastHybridHeight = null;
 
         function clamp(value, min, max) {
           return Math.min(Math.max(value, min), max);
@@ -132,6 +138,8 @@
                 height: isOpen ? 'auto' : 0,
                 visibility: isOpen ? 'visible' : 'hidden'
               });
+
+              sizeHybridTrack();
             }
           });
         }
@@ -169,6 +177,27 @@
           images.forEach(function (image, i) {
             image.classList.toggle('is-active', i === index);
           });
+
+          sizeHybridTrack();
+        }
+
+        /* Automatic track height for combined mode */
+
+        function sizeHybridTrack() {
+          if (mode !== 'hybrid') return;
+
+          // The pin occupies this much height. The rest is
+          // exactly the scroll distance needed between items.
+          var height = pin.offsetHeight + hybridDistance;
+
+          if (height !== lastHybridHeight) {
+            lastHybridHeight = height;
+
+            track.style.setProperty(
+              '--scroll-hybrid-height',
+              height + 'px'
+            );
+          }
         }
 
         /* Track measurements */
@@ -180,10 +209,12 @@
 
           var start = window.scrollY + rect.top - stickyTop;
 
-          var distance = Math.max(
-            track.offsetHeight - window.innerHeight + stickyTop,
-            0
-          );
+          var distance = mode === 'hybrid'
+            ? hybridDistance
+            : Math.max(
+                track.offsetHeight - window.innerHeight + stickyTop,
+                0
+              );
 
           return {
             start: start,
@@ -204,9 +235,10 @@
         }
 
         function isInsideTrack(metrics, scrollY) {
+          // Small tolerance for fractional browser scroll positions.
           return metrics.distance > 0 &&
-            scrollY >= metrics.start &&
-            scrollY <= metrics.end;
+            scrollY >= metrics.start - 1 &&
+            scrollY <= metrics.end + 1;
         }
 
         /* Original scroll-driven mode */
@@ -236,7 +268,7 @@
           setActive(index, immediate);
         }
 
-        /* Shared timer for tabs and hybrid modes */
+        /* Shared timer */
 
         function renderTimedProgress() {
           items.forEach(function (item, i) {
@@ -319,7 +351,7 @@
           timerFrame = window.requestAnimationFrame(tick);
         }
 
-        /* Click selection in timed and hybrid modes */
+        /* Click selection */
 
         function selectTimedItem(index) {
           stopTimer();
@@ -330,29 +362,27 @@
           renderTimedProgress();
 
           if (mode === 'hybrid') {
+            sizeHybridTrack();
+
             var metrics = getMetrics();
 
             if (metrics.distance > 0) {
               var target =
-                metrics.start + index * scrollDistance + 1;
+                metrics.start + index * scrollDistance;
 
               window.scrollTo({
-                top: Math.max(
-                  0,
-                  Math.min(target, metrics.end)
-                ),
+                top: Math.max(0, target),
                 behavior: 'instant'
               });
             }
           }
 
-          // Do not count the programmatic move as user scrolling.
+          // Ignore the programmatic move when counting user scroll.
           lastScrollY = window.scrollY;
-
           syncPlayback();
         }
 
-        /* Hybrid mode: scroll distance changes items */
+        /* Combined mode: scroll distance changes items */
 
         function updateHybridScroll() {
           var currentY = window.scrollY;
@@ -368,14 +398,13 @@
             return;
           }
 
-          // Include movement through the start/end boundary,
-          // even when the final position is outside the track.
+          // Count movement inside the track, including movement
+          // through its boundaries.
           var delta =
             clamp(currentY, metrics.start, metrics.end) -
             clamp(previousY, metrics.start, metrics.end);
 
           if (delta !== 0) {
-            // Reversing direction starts a fresh distance count.
             if (
               accumulatedScroll !== 0 &&
               Math.sign(delta) !== Math.sign(accumulatedScroll)
@@ -385,15 +414,22 @@
 
             accumulatedScroll += delta;
 
-            var steps = Math.trunc(
-              accumulatedScroll / scrollDistance
+            var direction = Math.sign(accumulatedScroll);
+
+            // Tolerance avoids missing a change by a fractional pixel.
+            var stepCount = Math.floor(
+              (Math.abs(accumulatedScroll) + 0.5) / scrollDistance
             );
 
-            if (steps !== 0) {
-              accumulatedScroll -= steps * scrollDistance;
+            if (stepCount > 0) {
+              accumulatedScroll = direction * Math.max(
+                0,
+                Math.abs(accumulatedScroll) -
+                  stepCount * scrollDistance
+              );
 
               var nextIndex = clamp(
-                activeIndex + steps,
+                activeIndex + direction * stepCount,
                 0,
                 items.length - 1
               );
@@ -413,7 +449,7 @@
           syncPlayback();
         }
 
-        /* Process scrolling once per animation frame */
+        /* Process scrolling once per frame */
 
         function requestScrollUpdate() {
           if (scrollFrame !== null) return;
@@ -452,6 +488,7 @@
           mode = nextMode;
           resetTimer();
           accumulatedScroll = 0;
+          lastHybridHeight = null;
 
           section.setAttribute('data-scroll-active-mode', mode);
 
@@ -460,6 +497,7 @@
           } else {
             setActive(activeIndex >= 0 ? activeIndex : 0, true);
             renderTimedProgress();
+            sizeHybridTrack();
           }
 
           lastScrollY = window.scrollY;
@@ -502,6 +540,7 @@
 
         window.addEventListener('resize', function () {
           applyMode();
+          sizeHybridTrack();
 
           if (window.innerWidth !== lastViewportWidth) {
             lastViewportWidth = window.innerWidth;
@@ -513,6 +552,7 @@
         });
 
         window.addEventListener('load', function () {
+          sizeHybridTrack();
           lastScrollY = window.scrollY;
           requestScrollUpdate();
         });
@@ -534,14 +574,28 @@
               true
             );
           });
+
+          sizeHybridTrack();
         });
 
         if ('IntersectionObserver' in window) {
-          var observer = new IntersectionObserver(function () {
-            syncPlayback();
+          var visibilityObserver = new IntersectionObserver(
+            function () {
+              syncPlayback();
+            }
+          );
+
+          visibilityObserver.observe(pin);
+        }
+
+        // Recalculate when content or responsive styling changes
+        // the pin's actual height.
+        if ('ResizeObserver' in window) {
+          var sizeObserver = new ResizeObserver(function () {
+            sizeHybridTrack();
           });
 
-          observer.observe(pin);
+          sizeObserver.observe(pin);
         }
 
         applyMode();
