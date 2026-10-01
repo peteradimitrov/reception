@@ -47,10 +47,10 @@
         var duration = positiveNumber('data-scroll-duration', 5000);
         var scrollDistance = positiveNumber('data-scroll-distance', 300);
 
-        var hybridDistance = Math.max(
-          0,
-          (items.length - 1) * scrollDistance
-        );
+        // Every item gets a full scroll interval.
+        var hybridDistance = items.length > 1
+          ? items.length * scrollDistance
+          : 0;
 
         var breakpoint = window.matchMedia(
           '(min-width: ' + minWidth + 'px)'
@@ -80,9 +80,6 @@
         var lastTime = null;
         var timerFrame = null;
 
-        var accumulatedScroll = 0;
-        var lastScrollY = window.scrollY;
-        var lastViewportWidth = window.innerWidth;
         var lastHybridHeight = null;
 
         function clamp(value, min, max) {
@@ -339,8 +336,7 @@
           if (elapsed >= duration) {
             var nextIndex = (activeIndex + 1) % items.length;
 
-            // Synchronize the selected item and scroll position
-            // in hybrid mode, including last-to-first looping.
+            // Also aligns the scroll position in hybrid mode.
             selectTimedItem(nextIndex);
 
             // selectTimedItem schedules the next frame.
@@ -356,7 +352,6 @@
         function selectTimedItem(index) {
           stopTimer();
           resetTimer();
-          accumulatedScroll = 0;
 
           setActive(index, false);
           renderTimedProgress();
@@ -367,8 +362,9 @@
             var metrics = getMetrics();
 
             if (metrics.distance > 0) {
+              // Place the selected item in the middle of its interval.
               var target =
-                metrics.start + index * scrollDistance;
+                metrics.start + (index + 0.5) * scrollDistance;
 
               window.scrollTo({
                 top: Math.max(0, target),
@@ -377,72 +373,36 @@
             }
           }
 
-          // Do not count this programmatic move as user scrolling.
-          lastScrollY = window.scrollY;
-
           syncPlayback();
         }
 
-        /* Combined mode: scroll distance changes items */
+        /* Combined mode: select by position within the track */
 
-        function updateHybridScroll() {
-          var currentY = window.scrollY;
-          var previousY = lastScrollY;
-
-          lastScrollY = currentY;
-
+        function updateHybridScroll(immediate) {
           var metrics = getMetrics();
 
           if (metrics.distance <= 0) {
-            accumulatedScroll = 0;
+            setActive(0, immediate);
+            renderTimedProgress();
             syncPlayback();
             return;
           }
 
-          // Include movement through the track's boundaries.
-          var delta =
-            clamp(currentY, metrics.start, metrics.end) -
-            clamp(previousY, metrics.start, metrics.end);
+          var position = clamp(
+            window.scrollY - metrics.start,
+            0,
+            metrics.distance
+          );
 
-          if (delta !== 0) {
-            if (
-              accumulatedScroll !== 0 &&
-              Math.sign(delta) !== Math.sign(accumulatedScroll)
-            ) {
-              accumulatedScroll = 0;
-            }
+          var nextIndex = Math.min(
+            Math.floor(position / scrollDistance),
+            items.length - 1
+          );
 
-            accumulatedScroll += delta;
-
-            var direction = Math.sign(accumulatedScroll);
-
-            var stepCount = Math.floor(
-              (Math.abs(accumulatedScroll) + 0.5) / scrollDistance
-            );
-
-            if (stepCount > 0) {
-              accumulatedScroll = direction * Math.max(
-                0,
-                Math.abs(accumulatedScroll) -
-                  stepCount * scrollDistance
-              );
-
-              var nextIndex = clamp(
-                activeIndex + direction * stepCount,
-                0,
-                items.length - 1
-              );
-
-              if (nextIndex !== activeIndex) {
-                resetTimer();
-                setActive(nextIndex, false);
-                renderTimedProgress();
-              }
-            }
-          }
-
-          if (!isInsideTrack(metrics, currentY)) {
-            accumulatedScroll = 0;
+          if (nextIndex !== activeIndex || immediate) {
+            resetTimer();
+            setActive(nextIndex, immediate);
+            renderTimedProgress();
           }
 
           syncPlayback();
@@ -459,7 +419,7 @@
             if (mode === 'scroll') {
               updateScroll(false);
             } else if (mode === 'hybrid') {
-              updateHybridScroll();
+              updateHybridScroll(false);
             } else {
               syncPlayback();
             }
@@ -486,21 +446,20 @@
 
           mode = nextMode;
           resetTimer();
-          accumulatedScroll = 0;
           lastHybridHeight = null;
 
           section.setAttribute('data-scroll-active-mode', mode);
 
           if (mode === 'scroll') {
             updateScroll(true);
+          } else if (mode === 'hybrid') {
+            sizeHybridTrack();
+            updateHybridScroll(true);
           } else {
             setActive(activeIndex >= 0 ? activeIndex : 0, true);
             renderTimedProgress();
-            sizeHybridTrack();
+            syncPlayback();
           }
-
-          lastScrollY = window.scrollY;
-          syncPlayback();
         }
 
         /* Item buttons */
@@ -540,24 +499,15 @@
         window.addEventListener('resize', function () {
           applyMode();
           sizeHybridTrack();
-
-          if (window.innerWidth !== lastViewportWidth) {
-            lastViewportWidth = window.innerWidth;
-            accumulatedScroll = 0;
-            lastScrollY = window.scrollY;
-          }
-
           requestScrollUpdate();
         });
 
         window.addEventListener('load', function () {
           sizeHybridTrack();
-          lastScrollY = window.scrollY;
           requestScrollUpdate();
         });
 
         document.addEventListener('visibilitychange', function () {
-          lastScrollY = window.scrollY;
           syncPlayback();
         });
 
