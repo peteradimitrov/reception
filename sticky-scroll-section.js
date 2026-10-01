@@ -186,8 +186,6 @@
         function sizeHybridTrack() {
           if (mode !== 'hybrid') return;
 
-          // The pin occupies this much height. The rest is
-          // exactly the scroll distance needed between items.
           var height = pin.offsetHeight + hybridDistance;
 
           if (height !== lastHybridHeight) {
@@ -235,7 +233,6 @@
         }
 
         function isInsideTrack(metrics, scrollY) {
-          // Small tolerance for fractional browser scroll positions.
           return metrics.distance > 0 &&
             scrollY >= metrics.start - 1 &&
             scrollY <= metrics.end + 1;
@@ -340,18 +337,21 @@
           lastTime = time;
 
           if (elapsed >= duration) {
-            elapsed = 0;
-            accumulatedScroll = 0;
-            lastScrollY = window.scrollY;
+            var nextIndex = (activeIndex + 1) % items.length;
 
-            setActive((activeIndex + 1) % items.length, false);
+            // Synchronize the selected item and scroll position
+            // in hybrid mode, including last-to-first looping.
+            selectTimedItem(nextIndex);
+
+            // selectTimedItem schedules the next frame.
+            return;
           }
 
           renderTimedProgress();
           timerFrame = window.requestAnimationFrame(tick);
         }
 
-        /* Click selection */
+        /* Click and automatic selection */
 
         function selectTimedItem(index) {
           stopTimer();
@@ -377,8 +377,9 @@
             }
           }
 
-          // Ignore the programmatic move when counting user scroll.
+          // Do not count this programmatic move as user scrolling.
           lastScrollY = window.scrollY;
+
           syncPlayback();
         }
 
@@ -398,8 +399,7 @@
             return;
           }
 
-          // Count movement inside the track, including movement
-          // through its boundaries.
+          // Include movement through the track's boundaries.
           var delta =
             clamp(currentY, metrics.start, metrics.end) -
             clamp(previousY, metrics.start, metrics.end);
@@ -416,7 +416,6 @@
 
             var direction = Math.sign(accumulatedScroll);
 
-            // Tolerance avoids missing a change by a fractional pixel.
             var stepCount = Math.floor(
               (Math.abs(accumulatedScroll) + 0.5) / scrollDistance
             );
@@ -588,8 +587,6 @@
           visibilityObserver.observe(pin);
         }
 
-        // Recalculate when content or responsive styling changes
-        // the pin's actual height.
         if ('ResizeObserver' in window) {
           var sizeObserver = new ResizeObserver(function () {
             sizeHybridTrack();
