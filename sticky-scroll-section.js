@@ -48,7 +48,10 @@
           section.getAttribute('data-scroll-timed-scroll') === 'true';
 
         var minWidth = positiveNumber('data-scroll-min-width', 0);
-        var duration = positiveNumber('data-scroll-duration', 5000);
+
+        // Autoplay is disabled unless a positive duration is specified.
+        var duration = positiveNumber('data-scroll-duration', 0);
+
         var scrollDistance = positiveNumber('data-scroll-distance', 300);
 
         var hybridDistance = items.length > 1
@@ -274,7 +277,9 @@
           items.forEach(function (item, i) {
             item.style.setProperty(
               '--progress',
-              i === activeIndex ? clamp(elapsed / duration, 0, 1) : 0
+              i === activeIndex && duration > 0
+                ? clamp(elapsed / duration, 0, 1)
+                : 0
             );
           });
         }
@@ -294,6 +299,8 @@
         }
 
         function canPlay() {
+          if (duration <= 0) return false;
+
           if (
             !mode ||
             mode === 'scroll' ||
