@@ -27,6 +27,10 @@
           section.querySelectorAll('[data-scroll-image]')
         ).filter(belongsToSection);
 
+        var stickyElements = Array.from(
+          section.querySelectorAll('[data-scroll-sticky]')
+        ).filter(belongsToSection);
+
         if (!track || !pin || !items.length) return;
 
         function positiveNumber(attribute, fallback) {
@@ -49,100 +53,20 @@
 
         var minWidth = positiveNumber('data-scroll-min-width', 0);
 
-        // Optional per-section cutoff. Omitted/invalid/zero keeps old behavior.
-        var disableBelow = positiveNumber('data-scroll-disable-below', 0);
-        var enabledBreakpoint = window.matchMedia(
-          '(min-width: ' + disableBelow + 'px)'
+        // Below this width, use non-sticky tabs instead of scroll/hybrid mode.
+        // Missing, invalid, or zero means no breakpoint override.
+        var disableBelow = positiveNumber(
+          'data-scroll-disable-below',
+          0
         );
-        var staticStyles = [];
 
-        // Save only properties we change so desktop styles can be restored.
-        function overrideStaticStyle(element, properties) {
-          if (!element) return;
-          Object.keys(properties).forEach(function (name) {
-            staticStyles.push({
-              element: element,
-              name: name,
-              value: element.style.getPropertyValue(name),
-              priority: element.style.getPropertyPriority(name)
-            });
-            element.style.setProperty(name, properties[name], 'important');
-          });
-        }
-
-        function restoreStaticStyles() {
-          staticStyles.forEach(function (saved) {
-            if (saved.value) {
-              saved.element.style.setProperty(
-                saved.name, saved.value, saved.priority
-              );
-            } else {
-              saved.element.style.removeProperty(saved.name);
-            }
-          });
-          staticStyles = [];
-        }
-
-        function enterStaticMode() {
-          overrideStaticStyle(track, {
-            height: 'auto', 'min-height': '0', 'max-height': 'none'
-          });
-          overrideStaticStyle(pin, {
-            position: 'static', top: 'auto', bottom: 'auto',
-            height: 'auto', 'min-height': '0', 'max-height': 'none',
-            'justify-content': 'flex-start'
-          });
-
-          section.querySelectorAll('[data-scroll-sticky]').forEach(
-            function (element) {
-              if (belongsToSection(element)) {
-                overrideStaticStyle(element, {
-                  position: 'static', top: 'auto', bottom: 'auto'
-                });
-              }
-            }
-          );
-
-          items.forEach(function (item, i) {
-            item.classList.add('is-active');
-            item.style.setProperty('--progress', 0);
-            if (triggers[i]) triggers[i].removeAttribute('aria-current');
-            animateDescription(descriptions[i], true, true);
-          });
-
-          images.forEach(function (image) {
-            image.classList.add('is-active');
-            overrideStaticStyle(image, {
-              position: 'relative', inset: 'auto', opacity: '1',
-              visibility: 'visible', transition: 'none'
-            });
-          });
-
-          section.querySelectorAll(
-            '[data-scroll-item-content], [data-scroll-item-inner], ' +
-            '[data-scroll-fill], [data-scroll-image] .scroll-pin__visual-content'
-          ).forEach(function (element) {
-            if (!belongsToSection(element)) return;
-            if (element.hasAttribute('data-scroll-fill')) {
-              overrideStaticStyle(element, { display: 'none' });
-            } else if (element.classList.contains('scroll-pin__visual-content')) {
-              overrideStaticStyle(element, {
-                opacity: '1', transform: 'none', transition: 'none'
-              });
-            } else {
-              overrideStaticStyle(element, {
-                display: 'block', height: 'auto', 'min-height': '0',
-                'max-height': 'none', visibility: 'visible',
-                overflow: 'visible', transition: 'none'
-              });
-            }
-          });
-        }
-
-        // Autoplay is disabled unless a positive duration is specified.
+        // Autoplay requires a positive duration in milliseconds.
         var duration = positiveNumber('data-scroll-duration', 0);
 
-        var scrollDistance = positiveNumber('data-scroll-distance', 300);
+        var scrollDistance = positiveNumber(
+          'data-scroll-distance',
+          300
+        );
 
         var hybridDistance = items.length > 1
           ? items.length * scrollDistance
@@ -150,6 +74,10 @@
 
         var breakpoint = window.matchMedia(
           '(min-width: ' + minWidth + 'px)'
+        );
+
+        var stickyBreakpoint = window.matchMedia(
+          '(min-width: ' + disableBelow + 'px)'
         );
 
         var trackHeight = (
@@ -182,8 +110,80 @@
         var scrollEndTimeout = null;
         var lastObservedY = window.scrollY;
 
-        // Resume timed progress after this brief scroll-idle period.
         var scrollIdleDelay = 120;
+
+        var fallbackLayoutApplied = false;
+        var savedLayoutStyles = [];
+
+        /* Non-sticky layout below the optional breakpoint */
+
+        function overrideLayoutStyle(element, properties) {
+          if (!element) return;
+
+          Object.keys(properties).forEach(function (name) {
+            savedLayoutStyles.push({
+              element: element,
+              name: name,
+              value: element.style.getPropertyValue(name),
+              priority: element.style.getPropertyPriority(name)
+            });
+
+            element.style.setProperty(
+              name,
+              properties[name],
+              'important'
+            );
+          });
+        }
+
+        function applyFallbackLayout() {
+          if (fallbackLayoutApplied) return;
+
+          fallbackLayoutApplied = true;
+
+          overrideLayoutStyle(track, {
+            height: 'auto',
+            'min-height': '0',
+            'max-height': 'none'
+          });
+
+          overrideLayoutStyle(pin, {
+            position: 'relative',
+            top: 'auto',
+            bottom: 'auto',
+            height: 'auto',
+            'min-height': '0',
+            'max-height': 'none',
+            'justify-content': 'flex-start'
+          });
+
+          stickyElements.forEach(function (element) {
+            overrideLayoutStyle(element, {
+              position: 'relative',
+              top: 'auto',
+              bottom: 'auto'
+            });
+          });
+        }
+
+        function restoreFallbackLayout() {
+          if (!fallbackLayoutApplied) return;
+
+          savedLayoutStyles.forEach(function (saved) {
+            if (saved.value) {
+              saved.element.style.setProperty(
+                saved.name,
+                saved.value,
+                saved.priority
+              );
+            } else {
+              saved.element.style.removeProperty(saved.name);
+            }
+          });
+
+          savedLayoutStyles = [];
+          fallbackLayoutApplied = false;
+        }
 
         /* Description animation */
 
@@ -331,7 +331,7 @@
             window.scrollY <= metrics.end + 1;
         }
 
-        /* Original scroll-driven mode */
+        /* Scroll-driven mode */
 
         function updateScroll(immediate) {
           if (mode !== 'scroll') return;
@@ -389,11 +389,9 @@
         }
 
         function canPlay() {
-          if (duration <= 0 || mode === 'static') return false;
-
           if (
-            !mode ||
-            mode === 'scroll' ||
+            duration <= 0 ||
+            (mode !== 'tabs' && mode !== 'hybrid') ||
             items.length < 2 ||
             document.hidden ||
             !isVisible()
@@ -472,14 +470,14 @@
           setActive(index, false);
           renderTimedProgress();
 
+          // Only hybrid mode changes the page scroll position.
+          // Normal tabs and breakpoint fallback tabs do not.
           if (mode === 'hybrid') {
             sizeHybridTrack();
 
             var metrics = getMetrics();
 
             if (metrics.distance > 0) {
-              // Start the selected item's interval.
-              // Round upward to avoid landing in the previous interval.
               var target = Math.ceil(
                 metrics.start + index * scrollDistance
               );
@@ -491,7 +489,6 @@
             }
           }
 
-          // The resulting scroll event must not overwrite the timer.
           lastObservedY = window.scrollY;
           syncPlayback();
         }
@@ -544,8 +541,6 @@
         /* Batch layout/scroll updates */
 
         function requestUpdate(manualScroll) {
-          if (mode === 'static') return;
-
           if (manualScroll) {
             pendingManualScroll = true;
           }
@@ -616,12 +611,22 @@
         /* Responsive mode selection */
 
         function applyMode() {
+          var useFallbackTabs =
+            disableBelow > 0 && !stickyBreakpoint.matches;
+
           var nextMode = 'scroll';
 
-          if (disableBelow > 0 && !enabledBreakpoint.matches) {
-            nextMode = 'static';
+          if (useFallbackTabs) {
+            nextMode = 'tabs';
           } else if (tabsEnabled && breakpoint.matches) {
             nextMode = hybridEnabled ? 'hybrid' : 'tabs';
+          }
+
+          // Update layout even if both sides of the breakpoint use tabs.
+          if (useFallbackTabs) {
+            applyFallbackLayout();
+          } else {
+            restoreFallbackLayout();
           }
 
           if (nextMode === mode) return;
@@ -630,16 +635,12 @@
           clearScrollActivity();
           resetTimer();
 
-          if (mode === 'static') restoreStaticStyles();
-
           mode = nextMode;
           lastHybridHeight = null;
 
           section.setAttribute('data-scroll-active-mode', mode);
 
-          if (mode === 'static') {
-            enterStaticMode();
-          } else if (mode === 'scroll') {
+          if (mode === 'scroll') {
             updateScroll(true);
           } else if (mode === 'hybrid') {
             sizeHybridTrack();
@@ -661,8 +662,6 @@
           trigger.type = 'button';
 
           trigger.addEventListener('click', function () {
-            if (mode === 'static') return;
-
             if (mode === 'tabs' || mode === 'hybrid') {
               selectTimedItem(index);
               return;
@@ -705,12 +704,10 @@
         });
 
         breakpoint.addEventListener('change', applyMode);
-        enabledBreakpoint.addEventListener('change', applyMode);
+        stickyBreakpoint.addEventListener('change', applyMode);
 
         reducedMotion.addEventListener('change', function () {
-          if (mode === 'static' || !reducedMotion.matches || activeIndex < 0) {
-            return;
-          }
+          if (!reducedMotion.matches || activeIndex < 0) return;
 
           descriptions.forEach(function (description, i) {
             animateDescription(
