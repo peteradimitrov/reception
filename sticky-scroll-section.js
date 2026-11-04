@@ -84,8 +84,10 @@
           110
         );
 
-        // Covers the 750ms CSS transition plus a settling period.
-        var anchorDuration = 850;
+        var anchorAnimationDuration = 750;
+
+        // Continue tracking briefly after the transition settles.
+        var anchorTrackingDuration = 850;
 
         var hybridDistance = items.length > 1
           ? items.length * scrollDistance
@@ -215,6 +217,7 @@
           if (!description) return;
 
           description.toggleAttribute('inert', !isOpen);
+
           description.setAttribute(
             'aria-hidden',
             String(!isOpen)
@@ -504,7 +507,7 @@
           pendingManualScroll = false;
         }
 
-        /* Mobile click anchoring */
+        /* Mobile click: scroll the selected item beneath the header */
 
         function anchorMobileItem(index) {
           cancelItemAnchor();
@@ -516,11 +519,8 @@
           var item = items[index];
           if (!item) return;
 
-          // Capture this before changing the active item.
-          var targetTop = Math.max(
-            anchorOffset,
-            item.getBoundingClientRect().top
-          );
+          // Capture its screen position before changing the active item.
+          var initialTop = item.getBoundingClientRect().top;
 
           var started = performance.now();
           var frame = null;
@@ -556,6 +556,24 @@
               return;
             }
 
+            var progress = reducedMotion.matches
+              ? 1
+              : clamp(
+                  (time - started) / anchorAnimationDuration,
+                  0,
+                  1
+                );
+
+            // Ease out expo.
+            var eased = progress >= 1
+              ? 1
+              : 1 - Math.pow(2, -10 * progress);
+
+            // Move from the clicked position toward the header offset.
+            var targetTop =
+              initialTop + (anchorOffset - initialTop) * eased;
+
+            // Account for the previous item closing and this one opening.
             var difference =
               item.getBoundingClientRect().top - targetTop;
 
@@ -569,14 +587,14 @@
               });
             }
 
-            if (time - started < anchorDuration) {
+            if (time - started < anchorTrackingDuration) {
               frame = window.requestAnimationFrame(update);
             } else {
               stop();
             }
           }
 
-          // Stop correcting as soon as the visitor takes over.
+          // Let the visitor interrupt the automatic scroll.
           window.addEventListener('touchstart', stop, {
             passive: true
           });
@@ -600,6 +618,7 @@
         function selectTimedItem(index, manualSelection) {
           cancelItemAnchor();
 
+          // Autoplay does not trigger mobile scroll anchoring.
           if (manualSelection && index !== activeIndex) {
             anchorMobileItem(index);
           }
@@ -611,8 +630,7 @@
           setActive(index, false);
           renderTimedProgress();
 
-          // Only hybrid mode explicitly scrolls to an item.
-          // Mobile tabs use the anchoring correction above.
+          // Hybrid mode keeps its existing scroll-linked behavior.
           if (mode === 'hybrid') {
             sizeHybridTrack();
 
