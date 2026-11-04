@@ -4,6 +4,10 @@
       '(prefers-reduced-motion: reduce)'
     );
 
+    var mobileViewport = window.matchMedia(
+      '(max-width: 767px)'
+    );
+
     document.querySelectorAll('[data-scroll-section]').forEach(
       function (section) {
         function belongsToSection(element) {
@@ -51,22 +55,37 @@
         var hybridEnabled =
           section.getAttribute('data-scroll-timed-scroll') === 'true';
 
-        var minWidth = positiveNumber('data-scroll-min-width', 0);
+        var minWidth = positiveNumber(
+          'data-scroll-min-width',
+          0
+        );
 
-        // Below this width, use non-sticky tabs instead of scroll/hybrid mode.
-        // Missing, invalid, or zero means no breakpoint override.
+        // Below this width, use non-sticky tabs.
+        // Missing, invalid, or zero keeps the configured behavior.
         var disableBelow = positiveNumber(
           'data-scroll-disable-below',
           0
         );
 
         // Autoplay requires a positive duration in milliseconds.
-        var duration = positiveNumber('data-scroll-duration', 0);
+        var duration = positiveNumber(
+          'data-scroll-duration',
+          0
+        );
 
         var scrollDistance = positiveNumber(
           'data-scroll-distance',
           300
         );
+
+        // Mobile header height plus the desired clearance.
+        var anchorOffset = positiveNumber(
+          'data-scroll-anchor-offset',
+          110
+        );
+
+        // Covers the 750ms CSS transition plus a settling period.
+        var anchorDuration = 850;
 
         var hybridDistance = items.length > 1
           ? items.length * scrollDistance
@@ -85,7 +104,10 @@
         ).trim();
 
         if (trackHeight && CSS.supports('height', trackHeight)) {
-          track.style.setProperty('--scroll-track-height', trackHeight);
+          track.style.setProperty(
+            '--scroll-track-height',
+            trackHeight
+          );
         }
 
         var triggers = items.map(function (item) {
@@ -114,6 +136,8 @@
 
         var fallbackLayoutApplied = false;
         var savedLayoutStyles = [];
+
+        var cancelItemAnchor = function () {};
 
         /* Non-sticky layout below the optional breakpoint */
 
@@ -191,7 +215,10 @@
           if (!description) return;
 
           description.toggleAttribute('inert', !isOpen);
-          description.setAttribute('aria-hidden', String(!isOpen));
+          description.setAttribute(
+            'aria-hidden',
+            String(!isOpen)
+          );
 
           if (window.gsap) {
             window.gsap.killTweensOf(description);
@@ -245,6 +272,7 @@
 
           var previousIndex = activeIndex;
           var initial = previousIndex === -1;
+
           activeIndex = index;
 
           items.forEach(function (item, i) {
@@ -260,7 +288,12 @@
               }
             }
 
-            if (initial || immediate || i === previousIndex || active) {
+            if (
+              initial ||
+              immediate ||
+              i === previousIndex ||
+              active
+            ) {
               animateDescription(
                 descriptions[i],
                 active,
@@ -295,6 +328,7 @@
 
         function getMetrics() {
           var rect = track.getBoundingClientRect();
+
           var stickyTop =
             parseFloat(window.getComputedStyle(pin).top) || 0;
 
@@ -347,8 +381,15 @@
             : 0;
 
           var raw = overall * items.length;
-          var index = Math.min(Math.floor(raw), items.length - 1);
-          var localProgress = overall >= 1 ? 1 : raw - index;
+
+          var index = Math.min(
+            Math.floor(raw),
+            items.length - 1
+          );
+
+          var localProgress = overall >= 1
+            ? 1
+            : raw - index;
 
           items.forEach(function (item, i) {
             var progress = i < index
@@ -435,7 +476,10 @@
           lastTime = time;
 
           if (elapsed >= duration) {
-            selectTimedItem((activeIndex + 1) % items.length);
+            selectTimedItem(
+              (activeIndex + 1) % items.length,
+              false
+            );
             return;
           }
 
@@ -460,9 +504,106 @@
           pendingManualScroll = false;
         }
 
+        /* Mobile click anchoring */
+
+        function anchorMobileItem(index) {
+          cancelItemAnchor();
+
+          if (mode !== 'tabs' || !mobileViewport.matches) {
+            return;
+          }
+
+          var item = items[index];
+          if (!item) return;
+
+          // Capture this before changing the active item.
+          var targetTop = Math.max(
+            anchorOffset,
+            item.getBoundingClientRect().top
+          );
+
+          var started = performance.now();
+          var frame = null;
+          var stopped = false;
+
+          function stop() {
+            if (stopped) return;
+
+            stopped = true;
+
+            if (frame !== null) {
+              window.cancelAnimationFrame(frame);
+              frame = null;
+            }
+
+            window.removeEventListener('touchstart', stop);
+            window.removeEventListener('wheel', stop);
+            window.removeEventListener('keydown', stop);
+            window.removeEventListener('pointerdown', stop);
+          }
+
+          function update(time) {
+            frame = null;
+
+            if (
+              stopped ||
+              mode !== 'tabs' ||
+              !mobileViewport.matches ||
+              !item.isConnected ||
+              document.hidden
+            ) {
+              stop();
+              return;
+            }
+
+            var difference =
+              item.getBoundingClientRect().top - targetTop;
+
+            if (Math.abs(difference) > 0.5) {
+              window.scrollTo({
+                top: Math.max(
+                  0,
+                  window.scrollY + difference
+                ),
+                behavior: 'instant'
+              });
+            }
+
+            if (time - started < anchorDuration) {
+              frame = window.requestAnimationFrame(update);
+            } else {
+              stop();
+            }
+          }
+
+          // Stop correcting as soon as the visitor takes over.
+          window.addEventListener('touchstart', stop, {
+            passive: true
+          });
+
+          window.addEventListener('wheel', stop, {
+            passive: true
+          });
+
+          window.addEventListener('keydown', stop);
+
+          window.addEventListener('pointerdown', stop, {
+            passive: true
+          });
+
+          cancelItemAnchor = stop;
+          frame = window.requestAnimationFrame(update);
+        }
+
         /* Clicks and automatic changes */
 
-        function selectTimedItem(index) {
+        function selectTimedItem(index, manualSelection) {
+          cancelItemAnchor();
+
+          if (manualSelection && index !== activeIndex) {
+            anchorMobileItem(index);
+          }
+
           stopTimer();
           clearScrollActivity();
           resetTimer();
@@ -470,8 +611,8 @@
           setActive(index, false);
           renderTimedProgress();
 
-          // Only hybrid mode changes the page scroll position.
-          // Normal tabs and breakpoint fallback tabs do not.
+          // Only hybrid mode explicitly scrolls to an item.
+          // Mobile tabs use the anchoring correction above.
           if (mode === 'hybrid') {
             sizeHybridTrack();
 
@@ -565,7 +706,9 @@
 
         function handleScroll() {
           var currentY = window.scrollY;
-          var moved = Math.abs(currentY - lastObservedY) > 0.01;
+
+          var moved =
+            Math.abs(currentY - lastObservedY) > 0.01;
 
           lastObservedY = currentY;
 
@@ -622,7 +765,14 @@
             nextMode = hybridEnabled ? 'hybrid' : 'tabs';
           }
 
-          // Update layout even if both sides of the breakpoint use tabs.
+          var layoutChanged =
+            useFallbackTabs !== fallbackLayoutApplied;
+
+          if (layoutChanged || nextMode !== mode) {
+            cancelItemAnchor();
+          }
+
+          // Update layout even if both sides use tabs.
           if (useFallbackTabs) {
             applyFallbackLayout();
           } else {
@@ -638,7 +788,10 @@
           mode = nextMode;
           lastHybridHeight = null;
 
-          section.setAttribute('data-scroll-active-mode', mode);
+          section.setAttribute(
+            'data-scroll-active-mode',
+            mode
+          );
 
           if (mode === 'scroll') {
             updateScroll(true);
@@ -646,7 +799,11 @@
             sizeHybridTrack();
             updateHybridScroll(true, true);
           } else {
-            setActive(activeIndex >= 0 ? activeIndex : 0, true);
+            setActive(
+              activeIndex >= 0 ? activeIndex : 0,
+              true
+            );
+
             renderTimedProgress();
             syncPlayback();
           }
@@ -663,21 +820,26 @@
 
           trigger.addEventListener('click', function () {
             if (mode === 'tabs' || mode === 'hybrid') {
-              selectTimedItem(index);
+              selectTimedItem(index, true);
               return;
             }
 
             var metrics = getMetrics();
             if (metrics.distance <= 0) return;
 
-            var itemDistance = metrics.distance / items.length;
-            var target = metrics.start + itemDistance * index;
+            var itemDistance =
+              metrics.distance / items.length;
+
+            var target =
+              metrics.start + itemDistance * index;
 
             target += Math.min(1, itemDistance / 2);
 
             window.scrollTo({
               top: Math.max(0, target),
-              behavior: reducedMotion.matches ? 'instant' : 'smooth'
+              behavior: reducedMotion.matches
+                ? 'instant'
+                : 'smooth'
             });
           });
         });
@@ -700,14 +862,28 @@
         });
 
         document.addEventListener('visibilitychange', function () {
+          if (document.hidden) {
+            cancelItemAnchor();
+          }
+
           syncPlayback();
         });
 
         breakpoint.addEventListener('change', applyMode);
-        stickyBreakpoint.addEventListener('change', applyMode);
+
+        stickyBreakpoint.addEventListener(
+          'change',
+          applyMode
+        );
+
+        mobileViewport.addEventListener('change', function () {
+          cancelItemAnchor();
+        });
 
         reducedMotion.addEventListener('change', function () {
-          if (!reducedMotion.matches || activeIndex < 0) return;
+          if (!reducedMotion.matches || activeIndex < 0) {
+            return;
+          }
 
           descriptions.forEach(function (description, i) {
             animateDescription(
