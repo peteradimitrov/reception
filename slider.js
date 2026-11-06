@@ -24,7 +24,7 @@ function initGlobalSliders() {
         parseFloat(root.getAttribute("data-focus-aspect")) || 610 / 696
       );
 
-      // Measure the Webflow width before assigning Swiper's navigation widths.
+      // Webflow supplies an average slot width, e.g. calc(100% / 3).
       const viewport = el.clientWidth;
       const base =
         (slides[0] && parseFloat(getComputedStyle(slides[0]).width)) ||
@@ -56,7 +56,7 @@ function initGlobalSliders() {
 
       const layoutWidths = new WeakMap();
 
-      // Only the text scales. The outer card uses actual dimensions.
+      // Only the text scales. The card background and clipping frame do not.
       slides.forEach(slide => {
         const card = slide.querySelector(
           ":scope > :is(.card--benefit, .card_new--benefit)"
@@ -65,11 +65,16 @@ function initGlobalSliders() {
 
         card.style.setProperty("transform", "none", "important");
 
-        const body = card.querySelector(":scope > :is(.card-body, .card-body_new)");
+        const body = card.querySelector(
+          ":scope > :is(.card-body, .card-body_new)"
+        );
         if (body) {
           body.style.setProperty("width", `${textBase}px`, "important");
           body.style.setProperty("height", `${textBase / aspect}px`, "important");
-          layoutWidths.set(body, parseFloat(getComputedStyle(body).width) || textBase);
+          layoutWidths.set(
+            body,
+            parseFloat(getComputedStyle(body).width) || textBase
+          );
         }
       });
 
@@ -82,17 +87,22 @@ function initGlobalSliders() {
         visibleSlots + Math.ceil(visibleSlots / 2),
         Math.ceil(capacity - 0.01) + 2
       );
+
       const canLoop = !fits && config.loop && slides.length >= requiredForLoop;
       const initial = fits
         ? Math.floor((slides.length - 1) / 2)
         : Math.min(savedIndex ?? 1, slides.length - 1);
 
-      root.dataset.focusVersion = "9";
+      root.dataset.focusVersion = "10";
       root.dataset.focusTextBaseline = mobileText ? "active" : "side";
       root.dataset.focusState = fits ? "static" : canLoop ? "loop" : "finite";
       el.style.setProperty("--focus-height", `${large / aspect}px`);
 
-      // Keep the main config's per-slider click and mousewheel settings.
+      // In a looping focus slider, handle taps with next/previous steps.
+      // A direct jump to the clicked logical index can relocate a visible card.
+      const stepOnTap = Boolean(canLoop && config.slideToClickedSlide);
+      if (stepOnTap) config.slideToClickedSlide = false;
+
       Object.assign(config, {
         effect: "slide",
         slidesPerView: "auto",
@@ -140,6 +150,7 @@ function initGlobalSliders() {
         const centers = rects.map(rect =>
           (rect.left + rect.width / 2 - viewportLeft) / parentScale
         );
+
         const mid = el.clientWidth / 2;
         let q = initial;
 
@@ -173,7 +184,7 @@ function initGlobalSliders() {
           origin = mid - (a + (b - a) * t);
         }
 
-        // Neighboring cards share the same pixel-aligned boundaries.
+        // Neighboring cards share one array of pixel-aligned edges.
         const browserWindow = typeof window === "undefined" ? null : window;
         const visualViewport = browserWindow?.visualViewport;
         const pixelRatio = Math.max(
@@ -209,7 +220,9 @@ function initGlobalSliders() {
           set("width", `${renderedWidth}px`);
           set("height", `${h}px`);
 
-          const body = card.querySelector(":scope > :is(.card-body, .card-body_new)");
+          const body = card.querySelector(
+            ":scope > :is(.card-body, .card-body_new)"
+          );
           if (body) {
             const scaleX = renderedWidth / (layoutWidths.get(body) || textBase);
             const nextTransform = `scale(${scaleX}, ${w / textBase})`;
@@ -239,6 +252,84 @@ function initGlobalSliders() {
         });
       }
 
+      // Click handling for looping focus sliders.
+      let clickRoute = null, clickFrame = 0, stepping = false;
+
+      function stopClickRoute() {
+        clickRoute = null;
+        if (clickFrame) cancelAnimationFrame(clickFrame);
+        clickFrame = 0;
+      }
+
+      function scheduleStep(swiper) {
+        if (!clickRoute || clickFrame || disposed) return;
+        clickFrame = requestAnimationFrame(() => {
+          clickFrame = 0;
+          takeStep(swiper);
+        });
+      }
+
+      function takeStep(swiper) {
+        if (!clickRoute || stepping || swiper.animating) return;
+
+        if (
+          disposed ||
+          swiper.destroyed ||
+          !swiper.enabled ||
+          swiper.slides[swiper.activeIndex] === clickRoute.target ||
+          clickRoute.remaining <= 0
+        ) {
+          stopClickRoute();
+          return;
+        }
+
+        const before = swiper.realIndex;
+        const direction = clickRoute.direction;
+        clickRoute.remaining--;
+        stepping = true;
+
+        try {
+          if (direction > 0) swiper.slideNext();
+          else swiper.slidePrev();
+        } finally {
+          stepping = false;
+        }
+
+        if (
+          !clickRoute ||
+          swiper.realIndex === before ||
+          swiper.slides[swiper.activeIndex] === clickRoute.target
+        ) {
+          stopClickRoute();
+        } else if (!swiper.animating) {
+          scheduleStep(swiper);
+        }
+      }
+
+      function onFocusTap(swiper, event) {
+        if (!stepOnTap || !swiper.enabled || swiper.animating || !swiper.allowClick) return;
+
+        // Leave links, buttons, and native video controls usable inside cards.
+        if (event?.target?.closest?.(
+          'a,button,input,textarea,select,video[controls],[role="button"],[contenteditable="true"]'
+        )) return;
+
+        const target = swiper.clickedSlide;
+        if (!target || target.parentNode !== wrapper) return;
+
+        const index = Array.from(swiper.slides).indexOf(target);
+        const distance = index - swiper.activeIndex;
+        if (index < 0 || !distance) return;
+
+        stopClickRoute();
+        clickRoute = {
+          target,
+          direction: Math.sign(distance),
+          remaining: Math.abs(distance)
+        };
+        takeStep(swiper);
+      }
+
       config.on = {
         init(swiper) {
           liveSwiper = swiper;
@@ -265,14 +356,22 @@ function initGlobalSliders() {
         update(swiper) { wake(swiper); },
         observerUpdate(swiper) { wake(swiper); },
         slidesUpdated(swiper) { wake(swiper); },
-        touchStart(swiper) { wake(swiper); },
+        tap: onFocusTap,
+        touchStart(swiper) {
+          stopClickRoute();
+          wake(swiper);
+        },
         touchEnd(swiper) {
           until = performance.now() + swiper.params.speed + 80;
           wake(swiper);
         },
-        transitionEnd(swiper) { wake(swiper); },
+        transitionEnd(swiper) {
+          wake(swiper);
+          if (!stepping) scheduleStep(swiper);
+        },
         destroy() {
           disposed = true;
+          stopClickRoute();
           cancelAnimationFrame(raf);
 
           if (visibilityObserver) {
@@ -307,7 +406,6 @@ function initGlobalSliders() {
 
         const clickToSlide =
           ($root.attr("data-click-to-slide") ?? "false").trim().toLowerCase() === "true";
-
         const mousewheelEnabled =
           ($root.attr("data-mousewheel") ?? "true").trim().toLowerCase() !== "false";
 
@@ -437,7 +535,7 @@ function initGlobalSliders() {
           Object.assign(config, { effect: "slide" });
         }
 
-        // Thumbnails remain click-only, independent of data-click-to-slide.
+        // Click-only thumbnails.
         let thumbsSwiper = null;
         if (thumbsEnabled && thumbsEl) {
           thumbsSwiper = new Swiper(thumbsEl, {
@@ -527,10 +625,14 @@ function initGlobalSliders() {
           }
 
           if (!autoplayEnabled) {
-            for (let i = 0; i < allWraps.length; i++) allWraps[i].style.display = "none";
+            for (let i = 0; i < allWraps.length; i++) {
+              allWraps[i].style.display = "none";
+            }
             return;
           } else {
-            for (let i = 0; i < allWraps.length; i++) allWraps[i].style.display = "";
+            for (let i = 0; i < allWraps.length; i++) {
+              allWraps[i].style.display = "";
+            }
           }
 
           const realTotal =
@@ -579,7 +681,6 @@ function initGlobalSliders() {
             } else {
               setBarsScale(prev, 0);
             }
-
             prevReal = curr;
           });
 
